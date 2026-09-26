@@ -1,0 +1,20 @@
+# Standalone: tilt up -f backend/Tiltfile (from the repository root).
+backend_dir = os.path.dirname(__file__)
+
+local_resource(
+    'backend',
+    cmd='(test -x .venv/bin/python || python3 -m venv .venv) && .venv/bin/python -m pip install -r requirements.txt',
+    cmd_bat='(if not exist .venv\\Scripts\\python.exe python -m venv .venv) && .venv\\Scripts\\python.exe -m pip install -r requirements.txt',
+    serve_cmd='.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload --reload-dir app',
+    serve_cmd_bat='.venv\\Scripts\\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload --reload-dir app',
+    dir=backend_dir,
+    serve_dir=backend_dir,
+    deps=['requirements.txt'],
+    allow_parallel=True,
+    readiness_probe=probe(
+        http_get=http_get_action(host='127.0.0.1', port=8000, path='/health'),
+        period_secs=2,
+    ),
+    links=[link('http://localhost:8000/docs', 'Backend API')],
+    labels=['backend'],
+)

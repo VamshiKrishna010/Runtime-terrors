@@ -1,0 +1,20 @@
+# Standalone: tilt up -f frontend/Tiltfile (from the repository root).
+frontend_dir = os.path.dirname(__file__)
+
+# Reinstall and restart Vite only when its dependency manifests change.
+# Vite handles source changes through HMR.
+local_resource(
+    'frontend',
+    cmd='npm ci',
+    serve_cmd='npm run dev -- --host localhost --port 5173 --strictPort',
+    dir=frontend_dir,
+    serve_dir=frontend_dir,
+    deps=['package.json', 'package-lock.json'],
+    allow_parallel=True,
+    readiness_probe=probe(
+        http_get=http_get_action(host='localhost', port=5173, path='/'),
+        period_secs=2,
+    ),
+    links=[link('http://localhost:5173', 'VeriPulse')],
+    labels=['frontend'],
+)
