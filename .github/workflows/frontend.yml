@@ -17,23 +17,10 @@ jobs:
         with:
           node-version: 20
 
-      - name: Find frontend
-        shell: bash
-        run: |
-          if [[ -f package.json ]]; then
-            echo "APP_DIR=." >> "$GITHUB_ENV"
-          elif [[ -f frontend/package.json ]]; then
-            echo "APP_DIR=frontend" >> "$GITHUB_ENV"
-          else
-            echo "No frontend package.json found at the repository root or in frontend/."
-            echo "APP_DIR=" >> "$GITHUB_ENV"
-          fi
-
       - name: Install dependencies
-        if: env.APP_DIR != ''
+        working-directory: frontend
         shell: bash
         run: |
-          cd "$APP_DIR"
           if [[ -f package-lock.json ]]; then
             npm ci
           else
@@ -41,15 +28,13 @@ jobs:
           fi
 
       - name: Run frontend tests
-        if: env.APP_DIR != ''
+        working-directory: frontend
         shell: bash
         run: |
-          cd "$APP_DIR"
           npm test --if-present
 
       - name: Build frontend
-        if: env.APP_DIR != ''
+        working-directory: frontend
         shell: bash
         run: |
-          cd "$APP_DIR"
           npm run build --if-present
