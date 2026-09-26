@@ -1,0 +1,52 @@
+name: Frontend checks
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Find frontend
+        shell: bash
+        run: |
+          if [[ -f package.json ]]; then
+            echo "APP_DIR=." >> "$GITHUB_ENV"
+          elif [[ -f frontend/package.json ]]; then
+            echo "APP_DIR=frontend" >> "$GITHUB_ENV"
+          else
+            echo "No frontend package.json found at the repository root or in frontend/."
+            exit 1
+          fi
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          cd "$APP_DIR"
+          if [[ -f package-lock.json ]]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Run frontend tests
+        shell: bash
+        run: |
+          cd "$APP_DIR"
+          npm test --if-present
+
+      - name: Build frontend
+        shell: bash
+        run: |
+          cd "$APP_DIR"
+          npm run build --if-present
