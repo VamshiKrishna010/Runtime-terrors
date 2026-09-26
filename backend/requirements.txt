@@ -4,3 +4,5 @@ python-multipart
 sqlmodel
 pillow
 ImageHash
+httpx
+python-dotenv

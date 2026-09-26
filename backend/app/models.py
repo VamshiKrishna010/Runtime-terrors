@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from sqlmodel import SQLModel, Field
 
@@ -9,7 +9,9 @@ class Incident(SQLModel, table=True):
     location: str
     latitude: Optional[float] = None
     longitude: Optional[float] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(
+   	 default_factory=lambda: datetime.now(timezone.utc)
+)    
     support_score: float = 0
     evidence_level: str = "Low"
     confirmations: int = 0
@@ -24,7 +26,9 @@ class Report(SQLModel, table=True):
     location: str
     latitude: Optional[float] = None
     longitude: Optional[float] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(    
+         default_factory=lambda: datetime.now(timezone.utc)
+)
     image_path: Optional[str] = None
     image_phash: Optional[str] = None
     exif_datetime: Optional[str] = None

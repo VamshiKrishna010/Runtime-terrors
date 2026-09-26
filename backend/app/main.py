@@ -10,6 +10,7 @@ from .models import Incident, Report
 from .ml import best_similarity
 from .evidence import analyze_image, phash_distance
 from .scoring import evidence_score
+from .convex_client import convex_mutation, upload_image
 
 BASE = Path(__file__).resolve().parent.parent
 UPLOADS = BASE / "uploads"
@@ -118,26 +119,36 @@ async def create_report(
             session.refresh(candidate)
             best = 0.0
 
-        image_path = None
-        phash = exif_dt = exif_gps = None
-        duplicate = False
-        if image and image.filename:
-            suffix = Path(image.filename).suffix.lower() or ".jpg"
-            filename = f"{uuid4().hex}{suffix}"
-            dest = UPLOADS / filename
-            dest.write_bytes(await image.read())
-            image_path = f"/uploads/{filename}"
-            info = analyze_image(str(dest))
-            phash, exif_dt, exif_gps = info["phash"], info["exif_datetime"], info["exif_gps"]
+            image_path = None
+            image_storage_id = None
+            phash = exif_dt = exif_gps = None
+            duplicate = False
 
-            if phash:
-                existing = session.exec(select(Report).where(Report.image_phash.is_not(None))).all()
-                for r in existing:
-                    dist = phash_distance(phash, r.image_phash)
-                    if dist is not None and dist <= 6:
-                        duplicate = True
-                        break
+            if image and image.filename:
+                suffix = Path(image.filename).suffix.lower() or ".jpg"
+                filename = f"{uuid4().hex}{suffix}"
+                dest = UPLOADS / filename
 
+                image_bytes = await image.read()
+                dest.write_bytes(image_bytes)
+
+                image_path = f"/uploads/{filename}"
+
+                # Also upload the same image to Convex Storage.
+                image_storage_id = await upload_image(
+                    image_bytes,
+                    image.content_type or "application/octet-stream",
+                )
+                info = analyze_image(str(dest))
+                phash, exif_dt, exif_gps = info["phash"], info["exif_datetime"], info["exif_gps"]
+
+                if phash:
+                    existing = session.exec(select(Report).where(Report.image_phash.is_not(None))).all()
+                    for r in existing:
+                        dist = phash_distance(phash, r.image_phash)
+                        if dist is not None and dist <= 6:
+                            duplicate = True
+                            break
         report = Report(
             incident_id=candidate.id,
             reporter_token=reporter_token,
