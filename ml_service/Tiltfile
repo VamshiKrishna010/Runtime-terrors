@@ -1,0 +1,21 @@
+# Standalone: tilt up -f ml_service/Tiltfile (from the repository root).
+ml_dir = os.path.dirname(__file__)
+repo_dir = os.path.dirname(ml_dir)
+
+local_resource(
+    'ml-service',
+    cmd='(test -x .venv/bin/python || python3 -m venv .venv) && .venv/bin/python -m pip install -r requirements-dev.txt',
+    cmd_bat='(if not exist .venv\\Scripts\\python.exe python -m venv .venv) && .venv\\Scripts\\python.exe -m pip install -r requirements-dev.txt',
+    serve_cmd='ml_service/.venv/bin/python -m uvicorn ml_service.main:app --host 127.0.0.1 --port 8001 --reload --reload-dir ml_service',
+    serve_cmd_bat='ml_service\\.venv\\Scripts\\python.exe -m uvicorn ml_service.main:app --host 127.0.0.1 --port 8001 --reload --reload-dir ml_service',
+    dir=ml_dir,
+    serve_dir=repo_dir,
+    deps=['requirements.txt', 'requirements-dev.txt'],
+    allow_parallel=True,
+    readiness_probe=probe(
+        http_get=http_get_action(host='127.0.0.1', port=8001, path='/health'),
+        period_secs=2,
+    ),
+    links=[link('http://localhost:8001/docs', 'ML API skeleton')],
+    labels=['ml'],
+)
