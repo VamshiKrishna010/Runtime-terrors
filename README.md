@@ -6,7 +6,6 @@ HackUMBC AI/ML MVP for trust-scored crowdsourced incident reports.
 
 - `frontend/` - React + Vite application
 - `backend/` - FastAPI + SQLite API
-- `ml_service/` - Vamshi's standalone ML setup skeleton and 30-report labeled seed set; see [ML setup](ml_service/README.md) for model choice, API contracts, and run commands.
 
 ## Run the backend
 
