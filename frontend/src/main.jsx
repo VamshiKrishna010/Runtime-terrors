@@ -33,6 +33,7 @@ import Analytics from './Analytics';
 import AuthGate, { useAuth } from './AuthGate';
 import IncidentEvidence from './IncidentEvidence';
 import { embedDescription, scoreEvidence } from './ml';
+import { API } from './api';
 
 import {
   MapContainer,
@@ -1023,7 +1024,7 @@ function ReporterFlow({ onSubmitted }) {
         analysisForm.append('image', image);
         analysisForm.append('description', form.description.trim());
 
-        const analysisResponse = await fetch('/api/evidence/analyze', {
+        const analysisResponse = await fetch(`${API}/evidence/analyze`, {
           method: 'POST',
           body: analysisForm,
         });

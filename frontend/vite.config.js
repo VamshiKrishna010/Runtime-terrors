@@ -4,6 +4,8 @@ import { existsSync } from 'node:fs';
 export default defineConfig(({ mode }) => {
   const env = { ...loadEnv(mode, '..', ''), ...loadEnv(mode, '.', ''), ...process.env };
   return {
+    // GitHub Pages serves the production build from the repository subpath.
+    base: env.VITE_DEPLOY_TARGET === 'github-pages' ? '/Runtime-terrors/' : '/',
     envDir: '..',
     envPrefix: ['VITE_'],
     define: { 'import.meta.env.CONVEX_URL': JSON.stringify(env.CONVEX_URL || env.VITE_CONVEX_URL || '') },
