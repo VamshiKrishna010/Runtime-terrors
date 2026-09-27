@@ -27,6 +27,7 @@ import {
 
 import './styles.css';
 import EvidenceCenter from './EvidenceCenter';
+import IncidentEvidence from './IncidentEvidence';
 
 import {
   MapContainer,
@@ -38,7 +39,7 @@ import {
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
-const API = 'http://localhost:8000';
+const API = 'http://127.0.0.1:8000';
 
 delete L.Icon.Default.prototype._getIconUrl;
 
@@ -594,6 +595,8 @@ function LiveIncidents({
                   }
                 />
               </div>
+
+              <IncidentEvidence key={current.id} incident={current} api={API} />
 
               <div className="bigEvidenceScore">
                 <div>

@@ -8,7 +8,7 @@ function preview(scene) {
     flood: '<path d="M0 120L160 65 250 120 430 60 640 115V320H0Z" fill="#ccd8df"/><path d="M210 120H430L560 320H80Z" fill="#f3f5f7"/><ellipse cx="320" cy="225" rx="170" ry="52" fill="#9dbfd4"/><path d="M180 225H290M320 245H450M290 205H400" stroke="#eaf2ff" stroke-width="5"/>',
     elevator: '<rect x="155" y="35" width="330" height="285" rx="6" fill="#8c9ba9"/><rect x="178" y="60" width="284" height="260" fill="#d7dfe7"/><path d="M320 60V320" stroke="#6b7c93" stroke-width="3"/><rect x="235" y="142" width="170" height="65" rx="4" fill="white"/><text x="320" y="170" text-anchor="middle" fill="#10233c" font-size="15">OUT OF SERVICE</text><text x="320" y="192" text-anchor="middle" fill="#6b7c93" font-size="12">Please use the stairs</text>',
   };
-  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360"><rect width="640" height="360" fill="#eaf0f5"/>${scenes[scene]}<rect y="320" width="640" height="40" fill="#10233c"/><text x="320" y="346" text-anchor="middle" fill="white" font-family="sans-serif" font-size="15">SIMULATED PREVIEW ? DEMO EVIDENCE</text></svg>`)}`;
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360"><rect width="640" height="360" fill="#eaf0f5"/>${scenes[scene]}</svg>`)}`;
 }
 
 function record(config) {
@@ -28,7 +28,7 @@ function record(config) {
     reporter: `anon-${config.id.slice(-3)}-demo`,
     metadata: [
       row('Camera / device', screenshot ? 'Browser screenshot' : 'Apple iPhone 15'),
-      row('Dimensions', screenshot ? '1440 ? 900 px' : video ? '1920 ? 1080 px' : '4032 ? 3024 px'),
+      row('Dimensions', screenshot ? '1440 x 900 px' : video ? '1920 x 1080 px' : '4032 x 3024 px'),
       row('Capture timestamp', capturedAt, conflict ? 'Conflicting' : 'Consistent'),
       row('Upload timestamp', uploadedAt),
       row('GPS', gps, screenshot ? 'Unavailable' : mismatch ? 'Conflicting' : 'Consistent'),

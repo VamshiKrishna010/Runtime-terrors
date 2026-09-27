@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Image, Copy, AlertTriangle, CheckCircle2, Search, ShieldCheck, MapPin, Clock3, BrainCircuit } from 'lucide-react';
+import { Image, Copy, AlertTriangle, CheckCircle2, Search, ShieldCheck, MapPin, XCircle, BrainCircuit } from 'lucide-react';
 import { mockEvidence } from './evidenceData';
 
 const formatTime = (value) => new Date(value).toLocaleString('en-US', {
@@ -9,7 +9,7 @@ const toneFor = (status) => ['Consistent', 'Strong support', 'Reviewed', 'Strong
   ? 'success' : ['Conflicting', 'Metadata conflict', 'Flagged'].includes(status) ? 'danger' : 'warning';
 
 function Status({ children, tone = toneFor(children) }) {
-  const Icon = tone === 'success' ? CheckCircle2 : AlertTriangle;
+  const Icon = tone === 'success' ? CheckCircle2 : tone === 'danger' ? XCircle : AlertTriangle;
   return <span className={`evidenceStatus ${tone}`}><Icon size={13} aria-hidden="true" />{children}</span>;
 }
 
@@ -34,11 +34,12 @@ export function EvidenceCard({ evidence, selected, onSelect, review }) {
     onClick={onSelect} aria-pressed={selected} aria-controls="evidence-inspector">
     <img src={evidence.preview} alt={evidence.previewAlt} />
     <span className="evidenceCardContent">
-      <span className="evidenceCardTop"><span>{evidence.id} ? {evidence.type}</span><span>{review}</span></span>
+      <span className="evidenceCardTop"><b>{evidence.id}</b><span className="evidenceTypeBadge">{evidence.type}</span><span className="evidenceReviewLabel">{review}</span></span>
       <strong>{evidence.title}</strong>
       <span className="evidenceCardLocation"><MapPin size={13} aria-hidden="true" />{evidence.location}</span>
       <time dateTime={evidence.uploadedAt}>{formatTime(evidence.uploadedAt)} ET</time>
-      <span className="evidenceCardBottom"><Status>{evidence.status}</Status><b>+{evidence.score} / 25</b></span>
+      <Status>{evidence.status}</Status>
+      <span className="evidenceCardBottom"><span>Evidence contribution</span><b>{evidence.score} / 25</b></span>
       {evidence.duplicateOf && <span className="evidenceDuplicate"><Copy size={13} aria-hidden="true" />Reused from {evidence.duplicateOf}</span>}
     </span>
   </button>;
@@ -71,7 +72,7 @@ export function DuplicatePanel({ evidence, collection }) {
       { label: 'Similar evidence count', value: `${matches.length} similar submission${matches.length === 1 ? '' : 's'}` },
       { label: 'Duplicate distance', value: duplicate ? 'Perceptual hash distance: 3' : 'Not applicable' },
       { label: 'First-seen timestamp', value: first.uploadedAt },
-      { label: 'Duplicate source', value: source ? `${source.id} ? ${source.title}` : duplicate ? `This record is the first submission; related: ${matches.map((item) => item.id).join(', ')}` : 'None in demo collection' },
+      { label: 'Duplicate source', value: source ? `${source.id}: ${source.title}` : duplicate ? `This record is the first submission; related: ${matches.map((item) => item.id).join(', ')}` : 'None in demo collection' },
     ]} />
     <p className="evidenceMuted">Similarity can indicate reuse. It does not establish intent or disprove an incident.</p>
   </Panel>;
@@ -82,7 +83,7 @@ export function ConsistencyPanel({ evidence }) {
     <Panel title="Image-to-report consistency"><Details rows={[
       { label: 'Reported claim', value: evidence.claim },
       { label: 'AI visual summary (simulated)', value: evidence.visualSummary },
-      { label: 'Consistency result', value: 'Content consistent with report' },
+      { label: 'Consistency result', value: 'Content consistent with report', status: 'Consistent' },
       { label: 'Support value', value: `${evidence.score} / 25 overall contribution (illustrative; not a truth probability)` },
     ]} /><p className="evidenceMuted">Visual agreement alone does not verify the time, location, or provenance.</p></Panel>
     <Panel title="Location consistency"><Details rows={[
@@ -105,7 +106,7 @@ export function EvidenceTimeline({ evidence }) {
   const steps = ['Evidence uploaded', evidence.type === 'Screenshot' ? 'EXIF extraction: no EXIF available' : 'EXIF / metadata extracted', 'Image hash generated', 'Duplicate scan completed', 'AI visual comparison completed', 'Evidence linked to incident', 'Support score updated'];
   return <Panel title="Evidence timeline"><ol className="timeline evidenceTimeline">{steps.map((step, index) =>
     <li className="timelineItem" key={step}><div className="timelineDot" /><b>{step}</b>
-      <span>{formatTime(new Date(new Date(evidence.uploadedAt).getTime() + index * 60000))} ET ? Simulated</span></li>
+      <span>{formatTime(new Date(new Date(evidence.uploadedAt).getTime() + index * 60000))} ET</span><span className="evidenceTimelineNote">Simulated event</span></li>
   )}</ol></Panel>;
 }
 
@@ -113,9 +114,13 @@ export function EvidenceInspector({ evidence, collection, review, onReview }) {
   const label = evidence.score >= 20 ? 'Strong support' : evidence.score >= 12 ? 'Moderate support' : 'Needs review';
   return <aside id="evidence-inspector" className="evidenceInspector" aria-label="Selected evidence detail">
     <div className="evidenceInspectorHeading"><div><p className="eyebrow">Evidence inspector</p><h2>{evidence.id}</h2></div><Status>{evidence.status}</Status></div>
-    <figure className="evidencePreview"><img src={evidence.preview} alt={evidence.previewAlt} />
-      <figcaption>{evidence.type === 'Video' ? 'Illustrated video sample frame' : 'Illustrated evidence preview'} ? Demo, not an uploaded file</figcaption></figure>
-    <Panel title={evidence.title}><Details rows={[
+    <Panel title="Evidence Preview">
+      <figure className="evidencePreview"><img src={evidence.preview} alt={evidence.previewAlt} />
+        <figcaption><span className="evidenceSimulationBadge">SIMULATED PREVIEW</span><span>Demo evidence</span>
+          <span className="evidencePreviewDescription">{evidence.type === 'Video' ? 'Illustrated video sample frame' : 'Illustrated evidence preview'}, not an uploaded file</span></figcaption>
+      </figure>
+    </Panel>
+    <Panel title="Evidence information"><p className="evidenceInformationTitle">{evidence.title}</p><Details rows={[
       { label: 'Evidence type', value: evidence.type },
       { label: 'Incident association', value: evidence.incidentId },
       { label: 'Report location', value: evidence.location },
@@ -127,7 +132,7 @@ export function EvidenceInspector({ evidence, collection, review, onReview }) {
     </Panel>
     <Panel title="Review state"><div className="evidenceReview"><Status>{review}</Status><span className="evidenceMuted">Local to this page session</span></div>
       <div className="evidenceReviewActions"><button type="button" className="evidencePrimary" disabled={review === 'Reviewed'} onClick={() => onReview('Reviewed')}>Mark reviewed</button>
-        <button type="button" disabled={review === 'Flagged'} onClick={() => onReview('Flagged')}>Flag for review</button></div>
+        <button type="button" className="evidenceFlag" disabled={review === 'Flagged'} onClick={() => onReview('Flagged')}>Flag for review</button></div>
       <p className="evidenceMuted" role="status">{review === 'Unreviewed' ? 'Awaiting human review.' : `${evidence.id} marked ${review.toLowerCase()}. No server changes were made.`}</p>
     </Panel>
     <MetadataPanel evidence={evidence} /><ProvenancePanel evidence={evidence} />
@@ -160,7 +165,7 @@ export default function EvidenceCenter({ evidence = mockEvidence }) {
     <header className="pageHeader"><div><p className="eyebrow">Evidence Intelligence</p><h1>Evidence Center</h1>
       <p>Inspect uploaded evidence, metadata, provenance, consistency, and reuse signals.</p></div>
       <span className="evidenceAnalysisBadge"><BrainCircuit size={16} aria-hidden="true" />AI-assisted analysis</span></header>
-    <div className="evidenceDemoNotice"><ShieldCheck size={18} aria-hidden="true" /><span>Demo workspace ? Simulated evidence and analysis, separate from live incidents. AI-assisted signals support human review; they do not prove truth.</span></div>
+    <div className="evidenceDemoNotice"><ShieldCheck size={18} aria-hidden="true" /><span>Demo workspace: Simulated evidence and analysis, separate from live incidents. AI-assisted signals support human review; they do not prove truth.</span></div>
     <div className="stats">
       <EvidenceSummaryCard title="Total Evidence" value={evidence.length} icon={Image} tone="info" subtitle="All demo submissions" />
       <EvidenceSummaryCard title="Unique Images" value={new Set(evidence.filter((item) => item.type !== 'Video').map((item) => item.imageKey)).size} icon={ShieldCheck} tone="success" subtitle="Distinct images and screenshots" />

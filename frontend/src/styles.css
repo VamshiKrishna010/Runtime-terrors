@@ -2587,70 +2587,552 @@ button.profile:hover,
   }
 }
 
-/* EVIDENCE CENTER */
-.evidenceCenter { min-width: 0; }
-.evidenceAnalysisBadge, .evidenceDemoNotice { display: flex; align-items: center; gap: 8px; color: var(--primary); background: var(--primary-soft); font-size: 12px; }
-.evidenceAnalysisBadge { padding: 9px 12px; border-radius: 999px; white-space: nowrap; font-weight: 700; }
-.evidenceDemoNotice { padding: 12px 16px; margin-bottom: 20px; border-radius: 10px; line-height: 1.6; }
-.evidenceDemoNotice svg { flex-shrink: 0; }
-.evidenceFilters { display: grid; grid-template-columns: minmax(200px, 1.5fr) repeat(4, minmax(120px, 1fr)); gap: 12px; margin-bottom: 22px; }
-.evidenceFilters label { display: flex; flex-direction: column; gap: 7px; font-size: 11px; font-weight: 700; color: var(--muted); min-width: 0; }
-.evidenceFilters input, .evidenceFilters select { width: 100%; min-width: 0; height: 40px; border: 1px solid var(--border); border-radius: 9px; padding: 0 10px; color: var(--text); background: var(--panel); font-size: 12px; }
-.evidenceSearch > span { position: relative; }
-.evidenceSearch svg { position: absolute; left: 11px; top: 12px; }
-.evidenceSearch input { padding-left: 34px; }
-.evidenceWorkspace { display: grid; grid-template-columns: minmax(280px, 0.95fr) minmax(350px, 1.25fr); gap: 22px; align-items: start; }
-.evidenceGallery, .evidenceInspector { min-width: 0; }
-.evidenceGalleryHeading, .evidenceInspectorHeading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.evidenceCenter h2 { margin: 0; font-size: 18px; letter-spacing: -0.02em; }
-.evidenceGalleryHeading > span { color: var(--muted); font-size: 12px; }
-.evidenceMuted { color: var(--muted); font-size: 12px; line-height: 1.6; }
-.evidenceCards { display: grid; gap: 12px; }
-.evidenceCard { display: flex; width: 100%; padding: 12px; gap: 13px; border: 1px solid var(--border); border-radius: 14px; background: var(--panel); color: var(--text); text-align: left; cursor: pointer; box-shadow: var(--shadow); }
-.evidenceCard:hover { border-color: var(--primary); transform: translateY(-1px); }
-.evidenceCard.selected { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); background: var(--primary-soft); }
-.evidenceCard > img { width: 100px; height: 92px; object-fit: cover; border-radius: 8px; }
-.evidenceCardContent { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 7px; }
-.evidenceCardContent > strong { font-size: 13px; line-height: 1.5; }
-.evidenceCardTop, .evidenceCardBottom { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
-.evidenceCardTop, .evidenceCardLocation, .evidenceCard time, .evidenceDuplicate { font-size: 10px; color: var(--muted); }
-.evidenceCardLocation, .evidenceDuplicate { display: flex; align-items: center; gap: 5px; }
-.evidenceCardBottom b { font-size: 12px; color: var(--text); }
-.evidenceStatus { display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px; border-radius: 6px; font-size: 10px; font-weight: 700; line-height: 1.5; }
-.evidenceStatus svg { flex-shrink: 0; }
-.evidenceStatus.success { color: var(--success); background: var(--success-soft); }
-.evidenceStatus.warning { color: var(--warning); background: var(--warning-soft); }
-.evidenceStatus.danger { color: var(--danger); background: var(--danger-soft); }
-.evidenceInspector { padding: 20px; background: var(--panel); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow); }
-.evidenceInspectorHeading .eyebrow { margin: 0 0 4px; }
-.evidencePreview { margin: 18px 0 0; }
-.evidencePreview img { display: block; width: 100%; max-height: 300px; object-fit: contain; border-radius: 10px; background: var(--primary-soft); }
-.evidencePreview figcaption { color: var(--muted); font-size: 10px; margin-top: 8px; }
-.evidencePanel { padding: 20px 0; border-bottom: 1px solid var(--border); }
-.evidencePanel:last-child { border: 0; padding-bottom: 0; }
-.evidencePanel h3 { font-size: 14px; margin: 0 0 14px; }
-.evidenceDetails { margin: 0; }
-.evidenceDetails > div { display: grid; grid-template-columns: minmax(100px, 0.8fr) minmax(0, 1.2fr); gap: 16px; padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 12px; line-height: 1.6; }
-.evidenceDetails > div:last-child { border-bottom: 0; }
-.evidenceDetails dt { color: var(--muted); }
-.evidenceDetails dd { margin: 0; overflow-wrap: anywhere; display: flex; flex-direction: column; align-items: flex-start; gap: 5px; }
-.evidenceScore { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.evidenceScore > strong { font-size: 30px; letter-spacing: -0.03em; }
-.evidenceScore small { font-size: 15px; font-weight: 500; color: var(--muted); }
-.evidencePanel progress { width: 100%; height: 8px; margin-top: 12px; accent-color: var(--primary); }
-.evidenceReview, .evidenceReviewActions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
-.evidenceReviewActions { margin-top: 14px; }
-.evidenceReviewActions button, .evidenceEmpty button { border: 1px solid var(--border); padding: 9px 13px; border-radius: 8px; background: var(--panel); color: var(--text); cursor: pointer; font-size: 12px; font-weight: 600; }
-.evidenceReviewActions button.evidencePrimary { color: var(--panel); background: var(--primary); border-color: var(--primary); }
-.evidenceReviewActions button:hover:not(:disabled), .evidenceEmpty button:hover { box-shadow: var(--shadow); border-color: var(--primary); }
-.evidenceReviewActions button:disabled { opacity: 0.55; cursor: default; }
-.evidenceCenter button:focus-visible, .evidenceCenter input:focus-visible, .evidenceCenter select:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
-.evidenceTimeline { list-style: none; margin-bottom: 0; }
-.evidenceEmpty { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 20px; text-align: center; gap: 12px; border: 1px solid var(--border); border-radius: 16px; background: var(--panel); color: var(--muted); }
-.evidenceEmpty h2 { color: var(--text); }
-.evidenceEmpty p { margin: 0; font-size: 13px; }
-@media (min-width: 1600px) { .evidenceCards { grid-template-columns: repeat(2, minmax(0, 1fr)); } .evidenceCard { flex-direction: column; } .evidenceCard > img { width: 100%; height: 140px; } }
-@media (max-width: 1200px) { .evidenceFilters { grid-template-columns: repeat(3, minmax(0, 1fr)); } .evidenceSearch { grid-column: span 2; } .evidenceCard { flex-direction: column; } .evidenceCard > img { width: 100%; height: 140px; } }
-@media (max-width: 900px) { .evidenceWorkspace { grid-template-columns: minmax(0, 1fr); } .evidenceCards { grid-template-columns: repeat(2, minmax(0, 1fr)); } .evidenceCenter .pageHeader { flex-wrap: wrap; } }
-@media (max-width: 540px) { .evidenceFilters { grid-template-columns: repeat(2, minmax(0, 1fr)); } .evidenceCards { grid-template-columns: minmax(0, 1fr); } .evidenceInspector { padding: 15px; } .evidenceDetails > div { grid-template-columns: minmax(0, 1fr); gap: 3px; } .evidenceInspectorHeading { flex-wrap: wrap; } }
-@media (prefers-reduced-motion: reduce) { .evidenceCard:hover { transform: none; } }
+/* Uploaded evidence in Live Incidents */
+.incidentVisualEvidence { margin: 20px 0; }
+.incidentVisualEvidence h3 { font-size: 14px; margin: 0 0 12px; }
+.incidentEvidenceMain { display: block; width: 100%; padding: 0; overflow: hidden; border: 1px solid var(--border); border-radius: 12px; background: var(--panel); cursor: zoom-in; }
+.incidentEvidenceMain img { display: block; width: 100%; max-height: 300px; object-fit: cover; }
+.incidentEvidenceCaption { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; font-size: 12px; }
+.incidentEvidenceCaption span { color: var(--muted); font-size: 11px; }
+.incidentEvidenceThumbnails { display: flex; gap: 8px; overflow-x: auto; padding: 4px; margin-top: 10px; }
+.incidentEvidenceThumbnails button { flex-shrink: 0; width: 70px; height: 56px; padding: 0; overflow: hidden; border: 2px solid var(--border); border-radius: 8px; background: var(--panel); cursor: pointer; }
+.incidentEvidenceThumbnails img { width: 100%; height: 100%; object-fit: cover; }
+.incidentEvidenceThumbnails button[aria-pressed="true"], .incidentEvidenceMain:hover { border-color: var(--primary); }
+.incidentVisualEvidence button:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+.incidentEvidencePlaceholder { min-height: 110px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 20px; background: var(--primary-soft); color: var(--muted); border: 1px solid var(--border); border-radius: 12px; font-size: 13px; }
+.incidentEvidencePlaceholder button { border: 1px solid var(--border); border-radius: 6px; background: var(--panel); color: var(--primary); padding: 6px 12px; cursor: pointer; }
+.incidentEvidenceDialog { width: min(960px, calc(100vw - 32px)); max-height: 90vh; padding: 16px; border: 1px solid var(--border); border-radius: 14px; background: var(--panel); color: var(--text); box-shadow: var(--shadow); }
+.incidentEvidenceDialog::backdrop { background: rgba(15, 39, 64, 0.75); }
+.incidentEvidenceDialogContent { display: flex; flex-direction: column; gap: 12px; }
+.incidentEvidenceDialogContent > img { width: 100%; max-height: 70vh; object-fit: contain; border-radius: 8px; }
+.incidentEvidenceDialogContent p { margin: 0; font-size: 12px; }
+.incidentEvidenceClose { align-self: flex-end; display: grid; place-items: center; padding: 7px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); color: var(--text); cursor: pointer; }
+
+/* EVIDENCE CENTER: scoped to keep Dashboard and Live Incidents unchanged. */
+.evidenceCenter,
+.evidenceCenter * {
+  min-width: 0;
+}
+
+.evidenceCenter .evidenceAnalysisBadge,
+.evidenceCenter .evidenceDemoNotice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--primary);
+  background: var(--primary-soft);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.evidenceCenter .evidenceAnalysisBadge {
+  padding: 8px 12px;
+  border-radius: 999px;
+  white-space: nowrap;
+  font-weight: 700;
+}
+
+.evidenceCenter .evidenceDemoNotice {
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  border-radius: 10px;
+}
+
+.evidenceCenter svg {
+  flex-shrink: 0;
+}
+
+/* Search occupies its own row above the four compact filters. */
+.evidenceCenter .evidenceFilters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  padding: 18px;
+  margin-bottom: 22px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel);
+}
+
+.evidenceCenter .evidenceFilters label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.evidenceCenter .evidenceSearch {
+  grid-column: 1 / -1;
+}
+
+.evidenceCenter .evidenceSearch > span {
+  position: relative;
+  display: block;
+}
+
+.evidenceCenter .evidenceSearch svg {
+  position: absolute;
+  left: 12px;
+  top: 13px;
+}
+
+.evidenceCenter .evidenceFilters input,
+.evidenceCenter .evidenceFilters select {
+  width: 100%;
+  height: 42px;
+  margin: 0;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--panel);
+  font-size: 13px;
+}
+
+.evidenceCenter .evidenceSearch input {
+  padding-left: 38px;
+}
+
+.evidenceCenter .evidenceWorkspace {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  align-items: start;
+  gap: 22px;
+}
+
+.evidenceCenter .evidenceGalleryHeading,
+.evidenceCenter .evidenceInspectorHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.evidenceCenter h2 {
+  margin: 0;
+  font-size: 18px;
+  letter-spacing: -0.02em;
+}
+
+.evidenceCenter .evidenceGalleryHeading > span,
+.evidenceCenter .evidenceMuted {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.evidenceCenter .evidenceInspectorHeading .eyebrow {
+  margin: 0 0 5px;
+}
+
+.evidenceCenter .evidenceCards,
+.evidenceCenter .evidenceInspector {
+  display: grid;
+  gap: 14px;
+}
+
+.evidenceCenter .evidenceCard {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  width: 100%;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel);
+  color: var(--text);
+  text-align: left;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+}
+
+.evidenceCenter .evidenceCard:hover {
+  border-color: var(--primary);
+}
+
+.evidenceCenter .evidenceCard.selected {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  box-shadow: 0 0 0 1px var(--primary);
+}
+
+.evidenceCenter .evidenceCard > img {
+  display: block;
+  width: 110px;
+  max-width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.evidenceCenter .evidenceCardContent {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+
+.evidenceCenter .evidenceCardTop {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  width: 100%;
+  font-size: 10px;
+}
+
+.evidenceCenter .evidenceTypeBadge,
+.evidenceCenter .evidenceReviewLabel {
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--muted);
+  background: var(--panel);
+  font-size: 10px;
+}
+
+.evidenceCenter .evidenceCardContent > strong {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.evidenceCenter .evidenceCardLocation,
+.evidenceCenter .evidenceDuplicate {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.evidenceCenter .evidenceCard time {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.evidenceCenter .evidenceCardBottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 5px 10px;
+  width: 100%;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.evidenceCenter .evidenceCardBottom b {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.evidenceCenter .evidenceStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.evidenceCenter .evidenceStatus.success {
+  color: var(--success);
+  background: var(--success-soft);
+}
+
+.evidenceCenter .evidenceStatus.warning {
+  color: var(--warning);
+  background: var(--warning-soft);
+}
+
+.evidenceCenter .evidenceStatus.danger {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.evidenceCenter .evidencePanel {
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.evidenceCenter .evidencePanel h3 {
+  margin: 0 0 16px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.evidenceCenter .evidencePreview {
+  margin: 0;
+  overflow: hidden;
+  border-radius: 10px;
+}
+
+.evidenceCenter .evidencePreview img {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  max-height: 320px;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.evidenceCenter .evidencePreview figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.evidenceCenter .evidenceSimulationBadge {
+  padding: 4px 8px;
+  border-radius: 5px;
+  color: var(--primary);
+  background: var(--primary-soft);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.evidenceCenter .evidencePreviewDescription {
+  flex-basis: 100%;
+}
+
+.evidenceCenter .evidenceInformationTitle {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.evidenceCenter .evidenceDetails {
+  margin: 0;
+}
+
+.evidenceCenter .evidenceDetails > div {
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  gap: 16px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.evidenceCenter .evidenceDetails > div:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.evidenceCenter .evidenceDetails dt {
+  color: var(--muted);
+}
+
+.evidenceCenter .evidenceDetails dd {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.evidenceCenter .evidenceScore {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.evidenceCenter .evidenceScore > strong {
+  font-size: 32px;
+  line-height: 1.2;
+}
+
+.evidenceCenter .evidenceScore small {
+  color: var(--muted);
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.evidenceCenter .evidencePanel progress {
+  display: block;
+  width: 100%;
+  height: 9px;
+  margin: 16px 0;
+  accent-color: var(--primary);
+}
+
+.evidenceCenter .evidencePanel > .evidenceMuted:last-child {
+  margin-bottom: 0;
+}
+
+.evidenceCenter .evidenceReview,
+.evidenceCenter .evidenceReviewActions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.evidenceCenter .evidenceReviewActions {
+  margin-top: 16px;
+}
+
+.evidenceCenter .evidenceReviewActions button,
+.evidenceCenter .evidenceEmpty button {
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--panel);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.evidenceCenter .evidenceReviewActions .evidencePrimary {
+  border-color: var(--primary);
+  color: var(--panel);
+  background: var(--primary);
+}
+
+.evidenceCenter .evidenceReviewActions .evidenceFlag {
+  border-color: var(--warning);
+  color: var(--warning);
+}
+
+.evidenceCenter .evidenceReviewActions button:hover:not(:disabled),
+.evidenceCenter .evidenceEmpty button:hover {
+  box-shadow: var(--shadow);
+  filter: brightness(0.96);
+}
+
+.evidenceCenter .evidenceReviewActions button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.evidenceCenter button:focus-visible,
+.evidenceCenter input:focus-visible,
+.evidenceCenter select:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+}
+
+.evidenceCenter .evidenceTimeline {
+  list-style: none;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.evidenceCenter .evidenceTimeline .evidenceTimelineNote {
+  margin-top: 4px;
+  font-size: 10px;
+}
+
+.evidenceCenter .evidenceEmpty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 55px 20px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  color: var(--muted);
+  background: var(--panel);
+  text-align: center;
+}
+
+.evidenceCenter .evidenceEmpty h2 {
+  color: var(--text);
+}
+
+.evidenceCenter .evidenceEmpty p {
+  margin: 0;
+  font-size: 13px;
+}
+
+@media (min-width: 1500px) {
+  .evidenceCenter .evidenceCard {
+    grid-template-columns: 140px minmax(0, 1fr);
+  }
+
+  .evidenceCenter .evidenceCard > img {
+    width: 140px;
+  }
+}
+
+@media (max-width: 1100px) {
+  .evidenceCenter .evidenceFilters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .evidenceCenter .evidenceWorkspace {
+    gap: 14px;
+  }
+
+  .evidenceCenter .evidenceCard {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .evidenceCenter .evidenceCard > img {
+    width: 120px;
+  }
+
+  .evidenceCenter .evidencePanel {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 760px) {
+  .evidenceCenter .evidenceWorkspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .evidenceCenter .evidenceCard {
+    grid-template-columns: 110px minmax(0, 1fr);
+  }
+
+  .evidenceCenter .evidenceCard > img {
+    width: 110px;
+  }
+}
+
+@media (max-width: 540px) {
+  .evidenceCenter .evidenceFilters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .evidenceCenter .evidenceDetails > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 5px;
+  }
+
+  .evidenceCenter .evidenceCard {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
