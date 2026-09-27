@@ -105,3 +105,41 @@ To check startup and exit once all services pass their health probes:
 ```sh
 tilt ci --timeout 5m
 ```
+
+## Run with Docker Compose
+
+Docker Compose starts the VeriPulse frontend, backend, and a Cloudflare Quick Tunnel.
+
+### 1. Configure environment variables
+
+Create the environment files from the provided templates:
+
+    cp backend/.env.example backend/.env
+    cp frontend/.env.example frontend/.env
+
+Set `GROQ_API_KEY` in `backend/.env` and set `CONVEX_URL` in `frontend/.env`.
+
+Do not commit `.env` files or API keys.
+
+### 2. Start VeriPulse
+
+From the repository root:
+
+    docker compose up --build
+
+The frontend is available at `http://localhost:5173`.
+
+The backend API is available at `http://localhost:8000`.
+
+The `tunnel` service automatically creates a temporary Cloudflare public URL. To find it, run:
+
+    docker compose logs tunnel
+
+Look for the `trycloudflare.com` URL in the output.
+
+### 3. Stop VeriPulse
+
+    docker compose down
+
+Cloudflare Quick Tunnel URLs are temporary and may change whenever the tunnel container is recreated.
+
