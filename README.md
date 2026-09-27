@@ -42,15 +42,15 @@ Never commit deploy keys. Create two GitHub **Environments** under
 
 | GitHub environment | Convex deploy key target | Used when |
 | --- | --- | --- |
-| `convex-deployment` | The shared Convex development deployment | A PR is merged into `pre-dev` or `dev` |
-| `convex-production` | The production Convex deployment | A merged PR from `pre-dev` or `dev` reaches `main` |
+| `convex-deployment` | The shared Convex development deployment | A PR is merged into `pre-dev` |
+| `convex-production` | The production Convex deployment | Any PR is merged into `dev` |
 
 Create each scoped key in the corresponding Convex deployment’s **Settings →
 Deploy keys** page, with the `deployment:deploy` permission. The
 `Convex delivery` workflow runs frontend and backend CI first, then invokes
-`npx convex deploy` with that environment’s key. A direct push to `main` does
-not deploy production; only a merged pull request whose source is `pre-dev` or
-`dev` can do so.
+`npx convex deploy` with that environment’s key. Promote changes from `pre-dev`
+to `dev` through a pull request. Any merged PR into `dev` deploys production
+after CI passes. Direct pushes do not deploy production; `main` has no deployment role.
 
 The same production job publishes the Vite frontend to GitHub Pages at
 `https://vamshikrishna010.github.io/Runtime-terrors/`. In repository
