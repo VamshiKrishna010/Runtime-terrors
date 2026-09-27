@@ -163,3 +163,7 @@ __pycache__/
 *.pyc
 .venv/
 node_modules/
+
+# User uploads and additive-migration backups
+backend/uploads/
+*.migration-*.bak
