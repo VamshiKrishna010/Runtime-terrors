@@ -47,6 +47,11 @@ export default defineSchema({
     // Groq Vision result
     visionAnalysis: v.optional(v.string()),
 
+    // Image authenticity check
+    authenticityClassification: v.optional(v.string()),
+    authenticityConfidence: v.optional(v.number()),
+    authenticityReason: v.optional(v.string()),
+
     semanticSimilarity: v.number(),
     embedding: v.optional(v.array(v.number())),
 
