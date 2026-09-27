@@ -31,7 +31,6 @@ import './styles.css';
 import EvidenceCenter from './EvidenceCenter';
 import Analytics from './Analytics';
 import IncidentEvidence from './IncidentEvidence';
-import { API, requestJson } from './api';
 
 import {
   MapContainer,
@@ -1093,6 +1092,9 @@ function App() {
   const [pickingLocation, setPickingLocation] =
     useState(false);
 
+  const votePending = useRef(false);
+  const analyticsRef = useRef(null);
+
   const loading = rawIncidents === undefined;
 
   const [
@@ -1147,6 +1149,9 @@ function App() {
         'Failed to submit vote',
         error
       );
+      setApiError('Unable to save your vote. Please try again.');
+    } finally {
+      votePending.current = false;
     }
   }
 
@@ -1945,9 +1950,12 @@ function App() {
         {activeView === 'analytics' && <Analytics
           ref={analyticsRef}
           renderHeaderControls={(analyticsLoading) => <HeaderControls refresh={refresh} loading={analyticsLoading} refreshLabel="analytics" />}
-          onSelectIncident={async (id) => {
-            const incident = await requestJson(`/incidents/${id}`);
-            setIncidents((current) => current.some((item) => item.id === id) ? current.map((item) => item.id === id ? incident : item) : [...current, incident]);
+          onSelectIncident={(id) => {
+            const incident = incidents.find((item) => item.id === id);
+            if (!incident) {
+              setApiError('This incident is no longer available.');
+              return;
+            }
             setSelected(incident);
             setActiveView('incidents');
           }}
