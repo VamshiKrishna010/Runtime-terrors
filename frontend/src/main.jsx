@@ -30,7 +30,9 @@ import {
 import './styles.css';
 import EvidenceCenter from './EvidenceCenter';
 import Analytics from './Analytics';
+import AuthGate, { useAuth } from './AuthGate';
 import IncidentEvidence from './IncidentEvidence';
+import { embedDescription, scoreEvidence } from './ml';
 
 import {
   MapContainer,
@@ -862,6 +864,7 @@ const MOCK_NOTIFICATIONS = [
 ];
 
 function HeaderControls({ refresh, loading, refreshLabel = 'incidents' }) {
+  const { user, signOut } = useAuth();
   const [open, setOpen] = useState(null);
   const [notice, setNotice] = useState('');
   const controlsRef = useRef(null);
@@ -941,20 +944,21 @@ function HeaderControls({ refresh, loading, refreshLabel = 'incidents' }) {
             setNotice('');
             setOpen(open === 'profile' ? null : 'profile');
           }}>
-          <span className="avatar">RT</span>
-          <span><b>Runtime Terrors</b><small>HackUMBC</small></span>
+          <span className="avatar">{user.initials}</span>
+          <span><b>{user.name}</b><small>{user.event} / Demo</small></span>
         </button>
         {open === 'profile' && (
           <section id="header-profile" className="headerPopover" ref={panelRef}
             tabIndex={-1} aria-label="Team profile">
-            <p>Team: <b>Runtime Terrors</b></p>
+            <p>Account: {user.email}</p><p>Demo session</p>
+            <p>Team: <b>{user.team}</b></p>
             <p>Event: <b>HackUMBC</b></p>
             {role && <p>UI role: {role}</p>}
             {branch && <p>Branch: {branch}</p>}
             <button type="button" className="headerPopoverAction"
               onClick={() => setNotice('Settings are coming soon.')}>Settings</button>
             <button type="button" className="headerPopoverAction"
-              onClick={() => setNotice('Sign out is a demo placeholder; no session was changed.')}>Sign out</button>
+              onClick={signOut}>Sign out</button>
             <p className="headerPopoverNote" role="status">{notice}</p>
           </section>
         )}
@@ -964,7 +968,8 @@ function HeaderControls({ refresh, loading, refreshLabel = 'incidents' }) {
 }
 
 function ReporterFlow({ onSubmitted }) {
-  const createReport = useMutation(api.reports.createWithIncident);
+  const createReport = useMutation(api.reports.createClustered);
+  const applyScore = useMutation(api.incidents.applyScore);
   const generateUploadUrl = useMutation(api.reports.generateUploadUrl);
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({ reporterToken: 'demo-user-1', category: 'Network / IT', location: 'ITE Building', description: '' });
@@ -1011,6 +1016,7 @@ function ReporterFlow({ onSubmitted }) {
     try {
       let imageStorageId;
       let analysis = {};
+      const embedding = await embedDescription(form.description.trim());
 
       if (image) {
         const analysisForm = new FormData();
@@ -1055,9 +1061,20 @@ function ReporterFlow({ onSubmitted }) {
         ...(analysis.authenticity?.classification ? { authenticityClassification: analysis.authenticity.classification } : {}),
         ...(typeof analysis.authenticity?.confidence === 'number' ? { authenticityConfidence: analysis.authenticity.confidence } : {}),
         ...(analysis.authenticity?.reason ? { authenticityReason: analysis.authenticity.reason } : {}),
+        ...(analysis.authenticity?.classification ? { authenticityClassification: analysis.authenticity.classification } : {}),
+        ...(typeof analysis.authenticity?.confidence === 'number' ? { authenticityConfidence: analysis.authenticity.confidence } : {}),
+        ...(analysis.authenticity?.reason ? { authenticityReason: analysis.authenticity.reason } : {}),
         ...(analysis.visualComparison?.match ? { visualMatch: analysis.visualComparison.match } : {}),
         ...(typeof analysis.visualComparison?.confidence === 'number' ? { visualMatchConfidence: analysis.visualComparison.confidence } : {}),
         ...(analysis.visualComparison?.reason ? { visualMatchReason: analysis.visualComparison.reason } : {}),
+        embedding,
+      });
+      const score = await scoreEvidence(result.scoreInput);
+      await applyScore({
+        id: result.incidentId,
+        supportScore: score.support_score,
+        evidenceLevel: score.evidence_level,
+        reasons: score.reasons,
       });
       onSubmitted(result.incidentId);
       setForm((current) => ({ ...current, description: '' })); chooseImage(null); setStep(1);
@@ -1077,6 +1094,7 @@ function ReporterFlow({ onSubmitted }) {
 }
 
 function App() {
+  const analyticsRef = useRef(null);
   const rawIncidents = useQuery(api.incidents.list);
   const submitVote = useMutation(api.incidents.vote);
   const incidents = useMemo(() => (rawIncidents || []).map((incident) => ({
@@ -1100,7 +1118,6 @@ function App() {
     useState(false);
 
   const votePending = useRef(false);
-  const analyticsRef = useRef(null);
 
   const loading = rawIncidents === undefined;
 
@@ -1109,7 +1126,9 @@ function App() {
     setSidebarOpen,
   ] = useState(false);
 
-  const refresh = async () => undefined;
+  const refresh = async () => {
+    if (activeView === 'analytics') await analyticsRef.current?.refresh();
+  };
 
   useEffect(() => {
     if (!selected) return;
@@ -1975,8 +1994,12 @@ function App() {
 const convexUrl = import.meta.env.CONVEX_URL || import.meta.env.VITE_CONVEX_URL;
 const root = createRoot(document.getElementById('root'));
 
-if (!convexUrl) {
-  root.render(<main className="app"><section className="panel" style={{ margin: 32 }}><p className="eyebrow">Configuration needed</p><h1>Convex is not configured</h1><p>Add <code>CONVEX_URL</code> to the repository <code>.env</code>, then restart Vite.</p></section></main>);
-} else {
-  root.render(<ConvexProvider client={new ConvexReactClient(convexUrl)}><App /></ConvexProvider>);
+root.render(<AuthGate>{convexUrl
+  ? <ConvexProvider client={new ConvexReactClient(convexUrl)}><App /></ConvexProvider>
+  : <main className="authPage"><section className="authCard"><h1>Convex is not configured</h1><p>Add the public CONVEX_URL to the repository environment configuration, then restart Vite.</p><ConfigurationSignOut /></section></main>
+}</AuthGate>);
+
+function ConfigurationSignOut() {
+  const { signOut } = useAuth();
+  return <button type="button" onClick={signOut}>Sign out</button>;
 }

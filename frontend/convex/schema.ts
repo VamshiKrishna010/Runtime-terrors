@@ -1,4 +1,4 @@
-import { defineSchema, defineTable } from "convex/server";
+﻿import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 export default defineSchema({
@@ -16,6 +16,8 @@ export default defineSchema({
 
     confirmations: v.number(),
     contradictions: v.number(),
+    reasons: v.optional(v.array(v.string())),
+    updatedAt: v.optional(v.number()),
 
     createdAt: v.number(),
 })
@@ -56,6 +58,7 @@ export default defineSchema({
     visualMatchReason: v.optional(v.string()),
 
     semanticSimilarity: v.number(),
+    embedding: v.optional(v.array(v.number())),
 
     createdAt: v.number(),
   })

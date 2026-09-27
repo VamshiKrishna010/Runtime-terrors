@@ -3174,3 +3174,73 @@ button.profile:hover,
 .reportCoordinates button { padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; color: var(--primary); background: var(--panel); cursor: pointer; }
 .evidenceCenter .evidencePreview video { display: block; width: 100%; max-height: 320px; border-radius: 10px; background: var(--primary-soft); }
 .evidenceCenter .evidenceMediaPlaceholder { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 15px; min-height: 85px; color: var(--muted); background: var(--primary-soft); border-radius: 8px; font-size: 11px; }
+
+/* Analytics module */
+.analyticsPage, .analyticsGrid > *, .analyticsSummary > *, .analyticsPage .statContent { min-width: 0; }
+.analyticsHeaderActions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.analyticsLiveStatus { display: inline-flex; align-items: center; gap: 6px; padding: 7px 10px; border-radius: 99px; background: var(--success-soft); color: var(--success); white-space: nowrap; font-size: 11px; }
+.analyticsLiveStatus.error { background: var(--danger-soft); color: var(--danger); }
+.analyticsFilters { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)) auto; align-items: end; gap: 12px; padding: 16px; background: var(--panel); border: 1px solid var(--border); border-radius: 14px; }
+.analyticsFilters label { display: flex; flex-direction: column; gap: 7px; min-width: 0; font-size: 12px; color: var(--muted); }
+.analyticsFilters select { width: 100%; min-width: 0; height: 40px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); color: var(--text); }
+.analyticsFilters button, .analyticsEmpty button { padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); color: var(--primary); cursor: pointer; }
+.analyticsScope, .analyticsNote { font-size: 12px; line-height: 1.65; color: var(--muted); }
+.analyticsScope { margin: 12px 0 20px; }
+.analyticsSummary { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 14px; margin-bottom: 20px; }
+.analyticsGrid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); align-items: start; gap: 18px; margin-bottom: 18px; }
+.analyticsPanel { min-width: 0; padding: 20px; border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow); background: var(--panel); }
+.analyticsPanel h2 { margin: 0 0 15px; font-size: 16px; }
+.analyticsChart { width: 100%; min-width: 0; height: 280px; font-size: 12px; }
+.analyticsChart.compact { height: 220px; }
+.analyticsValues { margin: 12px 0 0; }
+.analyticsValues > div { display: flex; justify-content: space-between; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 12px; line-height: 1.5; }
+.analyticsValues dt { color: var(--muted); }
+.analyticsValues dd { margin: 0; text-align: right; font-weight: 600; }
+.analyticsStrengthBar { display: flex; height: 26px; margin: 25px 0; overflow: hidden; border-radius: 7px; background: var(--primary-soft); }
+.analyticsStrengthBar .low { background: var(--danger); }
+.analyticsStrengthBar .emerging { background: var(--warning); }
+.analyticsStrengthBar .strong { background: var(--success); }
+.analyticsLocations { display: grid; gap: 20px; }
+.analyticsLocationHeading { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; font-size: 12px; overflow-wrap: anywhere; }
+.analyticsLocationHeading span { color: var(--muted); }
+.analyticsLocationTrack { height: 8px; margin-top: 8px; border-radius: 5px; overflow: hidden; background: var(--primary-soft); }
+.analyticsLocationTrack > span { display: block; height: 100%; background: var(--primary); }
+.analyticsTableScroll { max-width: 100%; overflow-x: auto; }
+.analyticsPage table { border-collapse: collapse; width: 100%; font-size: 12px; text-align: left; }
+.analyticsPage th, .analyticsPage td { padding: 12px 10px; border-bottom: 1px solid var(--border); }
+.analyticsPage th { color: var(--muted); white-space: nowrap; }
+.analyticsPage td { min-width: 90px; }
+.analyticsPage td:first-child { min-width: 180px; }
+.analyticsPage caption { text-align: left; padding-bottom: 10px; }
+.analyticsIncidentLink { border: 0; padding: 0; color: var(--primary); background: transparent; font: inherit; text-align: left; cursor: pointer; }
+.analyticsIncidentLink:hover { text-decoration: underline; }
+.analyticsData { margin-top: 10px; font-size: 12px; color: var(--muted); }
+.analyticsData summary { cursor: pointer; padding: 6px 0; }
+.analyticsData .analyticsTableScroll { max-height: 260px; overflow-y: auto; }
+.analyticsEmpty { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 50px 20px; text-align: center; border: 1px solid var(--border); border-radius: 14px; background: var(--panel); color: var(--muted); }
+.analyticsEmpty h2, .analyticsEmpty p { margin: 0; }
+.analyticsEmpty h2 { color: var(--text); }
+.analyticsChartEmpty { padding: 30px 10px; color: var(--muted); text-align: center; background: var(--primary-soft); border-radius: 10px; font-size: 13px; }
+.analyticsLoading > span { display: block; margin-bottom: 12px; color: var(--muted); }
+.analyticsSkeleton { height: 110px; border-radius: 14px; background: var(--primary-soft); }
+.analyticsSkeleton.chart { height: 320px; }
+.analyticsPage button:focus-visible, .analyticsPage select:focus-visible, .analyticsPage summary:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+@media (max-width:1150px) { .analyticsPage .pageHeader { flex-direction: column; } .analyticsFilters, .analyticsSummary { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media (max-width:760px) { .analyticsGrid { grid-template-columns: minmax(0,1fr); } }
+@media (max-width:540px) { .analyticsSummary, .analyticsFilters { grid-template-columns: minmax(0,1fr); } }
+/* Explicit local demo sign-in */
+.authPage { display: grid; place-items: center; min-height: 100vh; padding: 24px; background: #f5f7fb; }
+.authCard { width: min(100%,420px); padding: 30px; background: var(--panel); border: 1px solid var(--border); border-radius: 18px; box-shadow: var(--shadow); }
+.authLogo { display: inline-grid; place-items: center; padding: 12px; border-radius: 12px; color: var(--primary); background: var(--primary-soft); }
+.authCard h1 { margin: 14px 0 4px; font-size: 28px; }
+.authCard h2 { margin: 24px 0 14px; font-size: 19px; }
+.authCard p { color: var(--muted); font-size: 13px; line-height: 1.6; }
+.authDemoNotice { padding: 12px; background: var(--primary-soft); border-radius: 10px; font-size: 13px; }
+.authDemoNotice p { margin: 6px 0 0; }
+.authCard form { display: grid; gap: 12px; margin-top: 20px; }
+.authCard label { font-size: 13px; font-weight: 600; }
+.authCard input { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); color: var(--text); }
+.authCard button { display: flex; justify-content: center; align-items: center; gap: 8px; width: 100%; padding: 12px; border: 0; border-radius: 8px; color: white; background: var(--primary); cursor: pointer; }
+.authCard button:disabled { opacity: .65; cursor: wait; }
+.authCard button:focus-visible, .authCard input:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+.authCard .authHint { margin-bottom: 0; font-size: 11px; }
