@@ -1021,6 +1021,7 @@ function ReporterFlow({ onSubmitted }) {
       if (image) {
         const analysisForm = new FormData();
         analysisForm.append('image', image);
+        analysisForm.append('description', form.description.trim());
 
         const analysisResponse = await fetch('/api/evidence/analyze', {
           method: 'POST',
@@ -1060,6 +1061,12 @@ function ReporterFlow({ onSubmitted }) {
         ...(analysis.authenticity?.classification ? { authenticityClassification: analysis.authenticity.classification } : {}),
         ...(typeof analysis.authenticity?.confidence === 'number' ? { authenticityConfidence: analysis.authenticity.confidence } : {}),
         ...(analysis.authenticity?.reason ? { authenticityReason: analysis.authenticity.reason } : {}),
+        ...(analysis.authenticity?.classification ? { authenticityClassification: analysis.authenticity.classification } : {}),
+        ...(typeof analysis.authenticity?.confidence === 'number' ? { authenticityConfidence: analysis.authenticity.confidence } : {}),
+        ...(analysis.authenticity?.reason ? { authenticityReason: analysis.authenticity.reason } : {}),
+        ...(analysis.visualComparison?.match ? { visualMatch: analysis.visualComparison.match } : {}),
+        ...(typeof analysis.visualComparison?.confidence === 'number' ? { visualMatchConfidence: analysis.visualComparison.confidence } : {}),
+        ...(analysis.visualComparison?.reason ? { visualMatchReason: analysis.visualComparison.reason } : {}),
         embedding,
       });
       const score = await scoreEvidence(result.scoreInput);

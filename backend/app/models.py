@@ -38,6 +38,11 @@ class Report(SQLModel, table=True):
     duplicate_evidence: bool = False
     semantic_similarity: float = 0
 
+    # Image-to-report visual comparison
+    visual_match: Optional[str] = None
+    visual_match_confidence: Optional[float] = None
+    visual_match_reason: Optional[str] = None
+
 
 class Evidence(SQLModel, table=True):
     # Existing Report.image_path remains the compatibility URL for report clients.

@@ -63,8 +63,28 @@ export function adaptEvidence(item) {
       row('First seen', formatTime(duplicate.first_seen_at)),
       row('Earlier evidence', duplicate.duplicate_of ? `EV-${duplicate.duplicate_of}` : 'No earlier match'),
     ],
-    contentRows: [row('Reported claim', item.reported_claim), row('AI visual summary', item.content_consistency.visual_summary),
-      row('Result', 'Visual comparison model is not connected', item.content_consistency.status)],
+    contentRows: [
+      row('Reported claim', item.reported_claim),
+      row('AI visual summary', item.content_consistency.visual_summary),
+      row(
+        'Visual comparison',
+        item.content_consistency.status === 'yes'
+          ? 'Consistent with the reported claim'
+          : item.content_consistency.status === 'partial'
+            ? 'Partially consistent with the reported claim'
+            : item.content_consistency.status === 'no'
+              ? 'Conflicts with the reported claim'
+              : 'Unavailable',
+        item.content_consistency.status
+      ),
+      row(
+        'Confidence',
+        item.content_consistency.score == null
+          ? null
+          : `${Math.round(item.content_consistency.score * 100)}%`
+      ),
+      row('Explanation', item.content_consistency.reason),
+    ],
     locationRows: [row('Reported location', item.location), row('Report coordinates', location.reported_coordinates ? 'Provided with report' : null),
       row('EXIF GPS', location.evidence_coordinates ? 'Available in file metadata' : null),
       row('Distance from report', location.distance_meters == null ? null : `${location.distance_meters} m`), row('Result', statusLabel(location.status), location.status)],
@@ -75,7 +95,17 @@ export function adaptEvidence(item) {
       row('Time consistency', time.note || statusLabel(time.status), time.status),
       row('Location consistency', statusLabel(location.status), location.status),
       row('Editing metadata', metadata.editing_software || 'No software tag available', metadata.editing_software ? 'needs_review' : 'unavailable'),
-      row('Visual comparison', 'Not connected', 'unavailable'),
+      row(
+        'Visual comparison',
+        item.content_consistency.status === 'yes'
+          ? `Consistent (${Math.round((item.content_consistency.score ?? 0) * 100)}% confidence)`
+          : item.content_consistency.status === 'partial'
+            ? `Partial match (${Math.round((item.content_consistency.score ?? 0) * 100)}% confidence)`
+            : item.content_consistency.status === 'no'
+              ? `Conflict (${Math.round((item.content_consistency.score ?? 0) * 100)}% confidence)`
+              : 'Unavailable',
+        item.content_consistency.status
+      ),
       row('Reporter independence', 'Pseudonymous tokens do not verify identity or independence', 'unavailable')],
   };
 }
