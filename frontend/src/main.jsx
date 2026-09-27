@@ -27,19 +27,21 @@ import {
 
 import './styles.css';
 import EvidenceCenter from './EvidenceCenter';
+import Analytics from './Analytics';
 import IncidentEvidence from './IncidentEvidence';
+import { API, requestJson } from './api';
 
 import {
   MapContainer,
   TileLayer,
   Marker,
   Popup,
+  useMapEvents,
 } from 'react-leaflet';
 
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
-const API = 'http://127.0.0.1:8000';
 
 delete L.Icon.Default.prototype._getIconUrl;
 
@@ -75,8 +77,8 @@ const BUILDING_COORDS = {
 
 function getIncidentCoordinates(incident) {
   if (
-    incident.latitude &&
-    incident.longitude
+    incident.latitude != null &&
+    incident.longitude != null
   ) {
     return [
       Number(incident.latitude),
@@ -165,9 +167,17 @@ function TimelineItem({ title, text }) {
     </div>
   );
 }
+function ReportMapPin({ enabled, coordinates, onPick }) {
+  useMapEvents({ click: (event) => { if (enabled) onPick(event.latlng.lat, event.latlng.lng); } });
+  return coordinates ? <Marker position={coordinates}><Popup>Selected report location</Popup></Marker> : null;
+}
+
 function CampusMap({
   incidents,
   onSelectIncident,
+  pickingLocation,
+  reportCoordinates,
+  onPickLocation,
 }) {
   return (
     <section className="panel mapPanel">
@@ -211,6 +221,7 @@ function CampusMap({
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
+        <ReportMapPin enabled={pickingLocation} coordinates={reportCoordinates} onPick={onPickLocation} />
         {incidents.map((incident) => {
           const coords =
             getIncidentCoordinates(
@@ -737,8 +748,8 @@ function LiveIncidents({
                   />
 
                   <TimelineItem
-                    title="AI clustering"
-                    text="Similar reports grouped into this incident."
+                    title="Report linking"
+                    text="Reports linked using location, category, time and description overlap."
                   />
 
                   {(current.confirmations ||
@@ -841,7 +852,7 @@ const MOCK_NOTIFICATIONS = [
   { id: 3, message: '3 new community confirmations', unread: true },
 ];
 
-function HeaderControls({ refresh, loading }) {
+function HeaderControls({ refresh, loading, refreshLabel = 'incidents' }) {
   const [open, setOpen] = useState(null);
   const [notice, setNotice] = useState('');
   const controlsRef = useRef(null);
@@ -891,7 +902,7 @@ function HeaderControls({ refresh, loading }) {
     <div className="headerActions" ref={controlsRef}>
       <button type="button" className="iconButton" onClick={handleRefresh}
         disabled={loading} aria-busy={loading}
-        aria-label={loading ? 'Refreshing incidents' : 'Refresh incidents'}>
+        aria-label={loading ? `Refreshing ${refreshLabel}` : `Refresh ${refreshLabel}`}>
         <RefreshCw size={18} className={loading ? 'spin' : undefined} aria-hidden="true" />
       </button>
       <div className="headerPopoverAnchor">
@@ -944,6 +955,7 @@ function HeaderControls({ refresh, loading }) {
 }
 
 function App() {
+  const analyticsRef = useRef(null);
   const [incidents, setIncidents] =
     useState([]);
 
@@ -960,6 +972,13 @@ function App() {
     location: 'ITE Building',
   });
 
+  const [apiError, setApiError] = useState('');
+  const [reportNotice, setReportNotice] = useState('');
+  const [pickingLocation, setPickingLocation] = useState(false);
+  const votePending = useRef(false);
+  const reportPending = useRef(false);
+  const [fileKey, setFileKey] = useState(0);
+
   const [image, setImage] =
     useState(null);
 
@@ -975,36 +994,16 @@ function App() {
   ] = useState(false);
 
   const refresh = async () => {
+    if (activeView === 'analytics') return analyticsRef.current?.refresh();
     try {
       setLoading(true);
-
-      const response = await fetch(
-        `${API}/incidents`
-      );
-
-      const data =
-        await response.json();
-
+      const data = await requestJson('/incidents');
       setIncidents(data);
-
-      if (selected) {
-        const hit = data.find(
-          (incident) =>
-            incident.id === selected.id
-        );
-
-        if (hit) {
-          setSelected(hit);
-        }
-      }
+      setSelected((current) => current ? data.find((incident) => incident.id === current.id) || null : null);
+      setApiError('');
     } catch (error) {
-      console.error(
-        'Failed to load incidents',
-        error
-      );
-    } finally {
-      setLoading(false);
-    }
+      setApiError(error.message);
+    } finally { setLoading(false); }
   };
 
   useEffect(() => {
@@ -1041,80 +1040,40 @@ function App() {
 
   async function submit(event) {
     event.preventDefault();
-
+    if (reportPending.current) return;
+    reportPending.current = true;
+    setBusy(true);
+    setApiError('');
+    setReportNotice('');
     try {
-      setBusy(true);
-
-      const fd =
-        new FormData();
-
-      Object.entries(form).forEach(
-        ([key, value]) => {
-          fd.append(key, value);
-        }
-      );
-
-      if (image) {
-        fd.append(
-          'image',
-          image
-        );
-      }
-
-      await fetch(
-        `${API}/reports`,
-        {
-          method: 'POST',
-          body: fd,
-        }
-      );
-
-      setForm((current) => ({
-        ...current,
-        description: '',
-      }));
-
+      const fd = new FormData();
+      Object.entries(form).forEach(([key, value]) => { if (value != null && value !== '') fd.append(key, value); });
+      if (image) fd.append('image', image);
+      const result = await requestJson('/reports', { method: 'POST', body: fd });
+      setForm((current) => ({ ...current, description: '', latitude: null, longitude: null }));
       setImage(null);
-
+      setFileKey((key) => key + 1);
+      setPickingLocation(false);
       await refresh();
-    } catch (error) {
-      console.error(
-        'Failed to submit report',
-        error
-      );
-    } finally {
-      setBusy(false);
-    }
+      setSelected(result.incident);
+      setReportNotice(`Report saved to incident ${result.incident.id}.`);
+    } catch (error) { setApiError(error.message); }
+    finally { setBusy(false); reportPending.current = false; }
   }
 
   async function vote(id, type) {
+    if (votePending.current) return;
+    votePending.current = true;
+    setApiError('');
     try {
-      await fetch(
-        `${API}/incidents/${id}/${type}`,
-        {
-          method: 'POST',
-        }
-      );
-
-      await refresh();
-
-      if (selected?.id === id) {
-        const response =
-          await fetch(
-            `${API}/incidents/${id}`
-          );
-
-        const data =
-          await response.json();
-
-        setSelected(data);
-      }
-    } catch (error) {
-      console.error(
-        'Failed to submit vote',
-        error
-      );
-    }
+      const result = await requestJson(`/incidents/${id}/${type}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reporter_token: form.reporter_token }),
+      });
+      setIncidents((items) => items.map((item) => item.id === id ? result : item));
+      setSelected((current) => current?.id === id ? result : current);
+    } catch (error) { setApiError(error.message); }
+    finally { votePending.current = false; }
   }
 
   return (
@@ -1229,6 +1188,7 @@ function App() {
       </aside>
 
       <main>
+        {apiError && <div className="apiError" role="alert">{apiError}</div>}
         {activeView ===
           'dashboard' && (
           <>
@@ -1313,6 +1273,12 @@ function App() {
             </section>
 
             <CampusMap
+              pickingLocation={pickingLocation}
+              reportCoordinates={form.latitude != null && form.longitude != null ? [form.latitude, form.longitude] : null}
+              onPickLocation={(latitude, longitude) => {
+                setForm((current) => ({ ...current, latitude, longitude }));
+                setPickingLocation(false);
+              }}
               incidents={incidents}
               onSelectIncident={
                 setSelected
@@ -1601,6 +1567,18 @@ function App() {
                     </div>
                   </label>
 
+                  <div className="reportCoordinates">
+                    <button type="button" className="secondary" aria-pressed={pickingLocation} onClick={() => setPickingLocation((value) => !value)}>
+                      {pickingLocation ? 'Cancel map pin' : 'Pin report location on campus map'}
+                    </button>
+                    {pickingLocation && <p role="status">Click the campus map above to select this report's coordinates.</p>}
+                    <div className="fieldRow">
+                      <label>Latitude (optional)<input type="number" step="any" min="-90" max="90" value={form.latitude ?? ''} onChange={(event) => setForm({ ...form, latitude: event.target.value === '' ? null : Number(event.target.value) })} /></label>
+                      <label>Longitude (optional)<input type="number" step="any" min="-180" max="180" value={form.longitude ?? ''} onChange={(event) => setForm({ ...form, longitude: event.target.value === '' ? null : Number(event.target.value) })} /></label>
+                    </div>
+                    {form.latitude != null && <button type="button" className="secondary" onClick={() => setForm({ ...form, latitude: null, longitude: null })}>Clear coordinates</button>}
+                  </div>
+
                   <label>
                     Description
 
@@ -1638,14 +1616,15 @@ function App() {
                       </b>
 
                       <span>
-                        Upload an image to
+                        Upload an image or video (up to 10 MB) to
                         support your report.
                       </span>
                     </div>
 
                     <input
+                      key={fileKey}
                       type="file"
-                      accept="image/*"
+                      accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm"
                       onChange={(
                         event
                       ) =>
@@ -1689,6 +1668,7 @@ function App() {
                       </>
                     )}
                   </button>
+                  {reportNotice && <p role="status" className="fieldHint">{reportNotice}</p>}
                 </form>
               </div>
             </section>
@@ -1893,23 +1873,16 @@ function App() {
 
         {activeView === 'evidence' && <EvidenceCenter />}
 
-        {activeView ===
-          'analytics' && (
-          <div className="panel">
-            <p className="eyebrow">
-              Analytics Module
-            </p>
-
-            <h1>
-              Analytics
-            </h1>
-
-            <p>
-              We will build this module
-              after the evidence module.
-            </p>
-          </div>
-        )}
+        {activeView === 'analytics' && <Analytics
+          ref={analyticsRef}
+          renderHeaderControls={(analyticsLoading) => <HeaderControls refresh={refresh} loading={analyticsLoading} refreshLabel="analytics" />}
+          onSelectIncident={async (id) => {
+            const incident = await requestJson(`/incidents/${id}`);
+            setIncidents((current) => current.some((item) => item.id === id) ? current.map((item) => item.id === id ? incident : item) : [...current, incident]);
+            setSelected(incident);
+            setActiveView('incidents');
+          }}
+        />}
       </main>
     </div>
   );

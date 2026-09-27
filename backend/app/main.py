@@ -1,195 +1,298 @@
+import logging
+import math
+import os
+from collections import Counter
+from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Literal, Optional
 from uuid import uuid4
-from typing import Optional
+
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from sqlmodel import SQLModel, Session, create_engine, select
+from pydantic import BaseModel, ConfigDict, Field as PydanticField
+from sqlalchemy import delete, event
+from sqlmodel import Session, create_engine, select
 
-from .models import Incident, Report
+from .database import initialize
+from .analytics import aggregate_analytics
+from .evidence import MAX_UPLOAD_BYTES, inspect_bytes, iso, utc
 from .ml import best_similarity
-from .evidence import analyze_image, phash_distance
-from .scoring import evidence_score
-from .convex_client import convex_mutation, upload_image
+from .models import Evidence, Incident, Report, Vote
+from .services import all_evidence, duplicate_analysis, incident_payload, make_evidence, now, summary, upload_path
 
 BASE = Path(__file__).resolve().parent.parent
-UPLOADS = BASE / "uploads"
-UPLOADS.mkdir(exist_ok=True)
-engine = create_engine(f"sqlite:///{BASE / 'veripulse.db'}", connect_args={"check_same_thread": False})
-
-app = FastAPI(title="VeriPulse API")
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-app.mount("/uploads", StaticFiles(directory=UPLOADS), name="uploads")
-
-@app.on_event("startup")
-def startup():
-    SQLModel.metadata.create_all(engine)
+CATEGORIES = {"Network / IT", "Facilities", "Environmental", "Safety", "Other"}
+log = logging.getLogger(__name__)
 
 
-def recalc_incident(session: Session, incident: Incident):
-    reports = session.exec(select(Report).where(Report.incident_id == incident.id)).all()
-    reporters = len(set(r.reporter_token for r in reports))
-    sims = [r.semantic_similarity for r in reports if r.semantic_similarity > 0]
-    avg_sim = sum(sims) / len(sims) if sims else (1.0 if len(reports) > 1 else 0.0)
-    unique_hashes = set(r.image_phash for r in reports if r.image_phash and not r.duplicate_evidence)
-    dup_count = sum(1 for r in reports if r.duplicate_evidence)
+class ReviewInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    review_state: Literal["unreviewed", "reviewed", "flagged"]
 
-    # Basic location consistency: reports sharing the same typed location.
-    same_loc = sum(1 for r in reports if r.location.strip().lower() == incident.location.strip().lower())
-    loc_consistency = same_loc / len(reports) if reports else 0.0
 
-    score, level, reasons = evidence_score(
-        reporters, avg_sim, incident.confirmations, incident.contradictions,
-        len(unique_hashes), dup_count, loc_consistency
-    )
-    incident.support_score = score
-    incident.evidence_level = level
-    session.add(incident)
-    session.commit()
-    session.refresh(incident)
-    return reasons
+class VoteInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    reporter_token: str = PydanticField(min_length=1, max_length=200)
 
-@app.get("/health")
-def health():
-    return {"ok": True}
 
-@app.get("/incidents")
-def list_incidents():
-    with Session(engine) as session:
-        items = session.exec(select(Incident).order_by(Incident.created_at.desc())).all()
-        out = []
-        for incident in items:
-            reports = session.exec(select(Report).where(Report.incident_id == incident.id)).all()
-            reasons = recalc_incident(session, incident)
-            out.append({
-                **incident.model_dump(),
-                "report_count": len(reports),
-                "reasons": reasons,
-            })
-        return out
+def create_app(database_url=None, uploads_dir=None, allow_cleanup=None):
+    database_url = database_url or os.getenv("VERIPULSE_DATABASE_URL", f"sqlite:///{BASE / 'veripulse.db'}")
+    uploads = Path(uploads_dir or os.getenv("VERIPULSE_UPLOADS_DIR", str(BASE / "uploads"))).resolve()
+    uploads.mkdir(parents=True, exist_ok=True)
+    engine = create_engine(database_url, connect_args={"check_same_thread": False, "timeout": 30})
 
-@app.get("/incidents/{incident_id}")
-def incident_detail(incident_id: int):
-    with Session(engine) as session:
+    @event.listens_for(engine, "connect")
+    def sqlite_settings(connection, _):
+        connection.execute("PRAGMA foreign_keys=ON")
+
+    @asynccontextmanager
+    async def lifespan(app):
+        initialize(engine, uploads)
+        yield
+        engine.dispose()
+
+    app = FastAPI(title="VeriPulse API", lifespan=lifespan)
+    app.state.engine, app.state.uploads = engine, uploads
+    cleanup_enabled = (allow_cleanup if allow_cleanup is not None else os.getenv("VERIPULSE_ENABLE_DEV_CLEANUP") == "1") and os.getenv("VERIPULSE_ENV", "development").lower() != "production"
+    origins = [origin.strip() for origin in os.getenv("VERIPULSE_CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",") if origin.strip()]
+    app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True,
+                       allow_methods=["GET", "POST", "PATCH", "DELETE"], allow_headers=["Content-Type"])
+    app.mount("/uploads", StaticFiles(directory=uploads), name="uploads")
+
+    def get_incident(session, incident_id):
         incident = session.get(Incident, incident_id)
-        if not incident:
+        if incident is None:
             raise HTTPException(404, "Incident not found")
-        reports = session.exec(select(Report).where(Report.incident_id == incident_id)).all()
-        reasons = recalc_incident(session, incident)
-        return {
-            **incident.model_dump(),
-            "reports": [r.model_dump() for r in reports],
-            "reasons": reasons,
-        }
+        return incident
 
-@app.post("/reports")
-async def create_report(
-    reporter_token: str = Form(...),
-    description: str = Form(...),
-    category: str = Form(...),
-    location: str = Form(...),
-    latitude: Optional[float] = Form(None),
-    longitude: Optional[float] = Form(None),
-    image: Optional[UploadFile] = File(None),
-):
-    with Session(engine) as session:
-        incidents = session.exec(select(Incident)).all()
-        candidate = None
-        best = 0.0
-        for inc in incidents:
-            reports = session.exec(select(Report).where(Report.incident_id == inc.id)).all()
-            texts = [r.description for r in reports]
-            sim = best_similarity(description, texts)
-            same_place = location.strip().lower() == inc.location.strip().lower()
-            if same_place and sim > best:
-                best, candidate = sim, inc
+    def get_evidence(session, evidence_id):
+        item = session.get(Evidence, evidence_id)
+        if item is None:
+            raise HTTPException(404, "Evidence not found")
+        return item
 
-        # Conservative threshold for joining an existing incident.
-        if candidate is None or best < 0.20:
-            candidate = Incident(title=description[:70], category=category, location=location,
-                                 latitude=latitude, longitude=longitude)
-            session.add(candidate)
+    @app.get("/health")
+    def health():
+        return {"ok": True, "capabilities": {"metadata": True, "hashing": True, "visual_analysis": False}}
+
+    @app.get("/incidents")
+    def list_incidents():
+        with Session(engine) as session:
+            evidence = all_evidence(session)
+            return [incident_payload(session, item, evidence=evidence) for item in session.exec(select(Incident).order_by(Incident.created_at.desc())).all()]
+
+    @app.get("/incidents/{incident_id}")
+    def incident_detail(incident_id: int):
+        with Session(engine) as session:
+            return incident_payload(session, get_incident(session, incident_id), detail=True)
+
+    @app.post("/reports", status_code=201)
+    async def create_report(
+        reporter_token: str = Form(...), description: str = Form(...),
+        category: str = Form(...), location: str = Form(...),
+        latitude: Optional[float] = Form(None), longitude: Optional[float] = Form(None),
+        image: Optional[UploadFile] = File(None),
+    ):
+        reporter_token, description, category, location = [value.strip() for value in (reporter_token, description, category, location)]
+        if not reporter_token or len(reporter_token) > 200 or not description or len(description) > 4000 or not location or len(location) > 300:
+            raise HTTPException(422, "Reporter token, description and location must be nonblank and within 200, 4000 and 300 characters")
+        if category not in CATEGORIES:
+            raise HTTPException(422, "Unsupported category")
+        if (latitude is None) != (longitude is None):
+            raise HTTPException(422, "Provide both latitude and longitude")
+        if latitude is not None and (not math.isfinite(latitude) or not math.isfinite(longitude) or not -90 <= latitude <= 90 or not -180 <= longitude <= 180):
+            raise HTTPException(422, "Invalid coordinates")
+        data = info = filename = original = None
+        if image and image.filename:
+            try:
+                data = await image.read(MAX_UPLOAD_BYTES + 1)
+                if len(data) > MAX_UPLOAD_BYTES:
+                    raise HTTPException(413, "Evidence exceeds the 10 MB limit")
+                info = inspect_bytes(data, image.content_type or "")
+                filename = uuid4().hex + info["suffix"]
+                original = image.filename.replace("\\", "/").split("/")[-1][:255]
+            except ValueError as error:
+                raise HTTPException(422, str(error)) from error
+            finally:
+                await image.close()
+        saved = None
+        try:
+            with Session(engine) as session:
+                # Serialize writers: association, votes and counters are transactional.
+                session.connection().exec_driver_sql("BEGIN IMMEDIATE")
+                candidate, best = None, 0.0
+                timestamp = now()
+                for incident in session.exec(select(Incident).order_by(Incident.id)).all():
+                    if incident.location.strip().casefold() != location.casefold() or incident.category != category:
+                        continue
+                    # Prevent unrelated later outages joining a historical cluster.
+                    reports = session.exec(select(Report).where(Report.incident_id == incident.id)).all()
+                    latest_report = max((utc(report.created_at) for report in reports), default=utc(incident.created_at))
+                    if (timestamp - latest_report).total_seconds() > 7200:
+                        continue
+                    overlap = best_similarity(description, [report.description for report in reports])
+                    if overlap > best:
+                        candidate, best = incident, overlap
+                if candidate is None or best < 0.20:
+                    candidate = Incident(title=description[:70], category=category, location=location,
+                                         latitude=latitude, longitude=longitude, created_at=timestamp, updated_at=timestamp)
+                    session.add(candidate)
+                    session.flush()
+                    best = 0.0
+                elif candidate.latitude is None and latitude is not None:
+                    candidate.latitude, candidate.longitude = latitude, longitude
+                report = Report(incident_id=candidate.id, reporter_token=reporter_token, description=description,
+                                category=category, location=location, latitude=latitude, longitude=longitude,
+                                created_at=timestamp, semantic_similarity=best,
+                                image_path=f"/uploads/{filename}" if filename else None,
+                                image_phash=info["phash"] if info else None,
+                                exif_datetime=info["metadata"].get("capture_timestamp") if info else None)
+                session.add(report)
+                session.flush()
+                if info:
+                    saved = upload_path(uploads, filename)
+                    saved.write_bytes(data)
+                    item = make_evidence(report, filename, original, info, len(data))
+                    session.add(item)
+                    session.flush()
+                    report.duplicate_evidence = bool(duplicate_analysis(item, session.exec(select(Evidence)).all())["duplicate_of"])
+                    session.add(report)
+                result = incident_payload(session, candidate, detail=True, persist=True)
+                if info:
+                    item.timeline = [*item.timeline, {"title": "Support score recalculated", "timestamp": iso(now())}]
+                    session.add(item)
+                session.commit()
+                return {"report": {**report.model_dump(exclude={"reporter_token", "exif_gps"}), "created_at": iso(report.created_at)},
+                        "incident": result, "reasons": result["reasons"]}
+        except Exception:
+            if saved:
+                saved.unlink(missing_ok=True)
+            raise
+
+    def record_vote(incident_id, action, payload):
+        with Session(engine) as session:
+            session.connection().exec_driver_sql("BEGIN IMMEDIATE")
+            incident = get_incident(session, incident_id)
+            previous = None
+            if payload:
+                token = payload.reporter_token.strip()
+                if not token:
+                    raise HTTPException(422, "Reporter token must be nonblank")
+                previous = session.exec(select(Vote).where(Vote.incident_id == incident_id, Vote.reporter_token == token)).first()
+                if previous and previous.action == action:
+                    return incident_payload(session, incident, detail=True)
+                if previous:
+                    field = "confirmations" if previous.action == "confirm" else "contradictions"
+                    setattr(incident, field, max(0, getattr(incident, field) - 1))
+                    previous.action = action
+                    session.add(previous)
+                else:
+                    session.add(Vote(incident_id=incident_id, reporter_token=token, action=action))
+            field = "confirmations" if action == "confirm" else "contradictions"
+            setattr(incident, field, getattr(incident, field) + 1)
+            result = incident_payload(session, incident, detail=True, persist=True)
             session.commit()
-            session.refresh(candidate)
-            best = 0.0
+            return result
 
-            image_path = None
-            image_storage_id = None
-            phash = exif_dt = exif_gps = None
-            duplicate = False
+    @app.post("/incidents/{incident_id}/confirm")
+    def confirm(incident_id: int, payload: Optional[VoteInput] = None):
+        return record_vote(incident_id, "confirm", payload)
 
-            if image and image.filename:
-                suffix = Path(image.filename).suffix.lower() or ".jpg"
-                filename = f"{uuid4().hex}{suffix}"
-                dest = UPLOADS / filename
+    @app.post("/incidents/{incident_id}/contradict")
+    def contradict(incident_id: int, payload: Optional[VoteInput] = None):
+        return record_vote(incident_id, "contradict", payload)
 
-                image_bytes = await image.read()
-                dest.write_bytes(image_bytes)
+    @app.get("/evidence/summary")
+    def evidence_summary():
+        with Session(engine) as session:
+            return summary(all_evidence(session))
 
-                image_path = f"/uploads/{filename}"
+    @app.get("/evidence")
+    def list_evidence(search: str = "", status: Optional[Literal["consistent", "needs_review", "metadata_conflict", "duplicate"]] = None, incident_id: Optional[int] = None,
+                      type: Optional[Literal["image", "video", "screenshot"]] = None,
+                      sort: Literal["newest", "highest_support", "needs_review", "duplicate_first"] = "newest"):
+        with Session(engine) as session:
+            items = all_evidence(session)
+            items = [e for e in items if (not search or search.casefold() in f"{e['title']} {e['location']} {e['reported_claim']} {e['id']}".casefold())
+                     and (not status or e["status"] == status) and (incident_id is None or e["incident_id"] == incident_id)
+                     and (not type or e["type"] == type)]
+            key = {"newest": lambda e: e["id"], "highest_support": lambda e: (e["support_contribution"], e["id"]),
+                   "needs_review": lambda e: (e["status"] in ("needs_review", "metadata_conflict"), e["id"]),
+                   "duplicate_first": lambda e: (bool(e["duplicate_analysis"]["duplicate_of"]), e["id"])}[sort]
+            return sorted(items, key=key, reverse=True)
 
-                # Also upload the same image to Convex Storage.
-                image_storage_id = await upload_image(
-                    image_bytes,
-                    image.content_type or "application/octet-stream",
-                )
-                info = analyze_image(str(dest))
-                phash, exif_dt, exif_gps = info["phash"], info["exif_datetime"], info["exif_gps"]
+    @app.get("/evidence/{evidence_id}")
+    def evidence_detail(evidence_id: int):
+        with Session(engine) as session:
+            get_evidence(session, evidence_id)
+            return next(e for e in all_evidence(session) if e["id"] == evidence_id)
 
-                if phash:
-                    existing = session.exec(select(Report).where(Report.image_phash.is_not(None))).all()
-                    for r in existing:
-                        dist = phash_distance(phash, r.image_phash)
-                        if dist is not None and dist <= 6:
-                            duplicate = True
-                            break
-        report = Report(
-            incident_id=candidate.id,
-            reporter_token=reporter_token,
-            description=description,
-            category=category,
-            location=location,
-            latitude=latitude,
-            longitude=longitude,
-            image_path=image_path,
-            image_phash=phash,
-            exif_datetime=exif_dt,
-            exif_gps=exif_gps,
-            duplicate_evidence=duplicate,
-            semantic_similarity=best,
-        )
-        session.add(report)
-        session.commit()
-        session.refresh(report)
-        reasons = recalc_incident(session, candidate)
-        return {"report": report.model_dump(), "incident": candidate.model_dump(), "reasons": reasons}
+    @app.patch("/evidence/{evidence_id}/review")
+    def review_evidence(evidence_id: int, payload: ReviewInput):
+        with Session(engine) as session:
+            session.connection().exec_driver_sql("BEGIN IMMEDIATE")
+            item = get_evidence(session, evidence_id)
+            if item.review_state != payload.review_state:
+                item.review_state = payload.review_state
+                item.timeline = [*item.timeline, {"title": f"Human review updated: {payload.review_state}", "timestamp": iso(now())}]
+                session.add(item)
+                session.commit()
+            return next(e for e in all_evidence(session) if e["id"] == evidence_id)
 
-@app.post("/incidents/{incident_id}/confirm")
-def confirm(incident_id: int):
-    with Session(engine) as session:
-        incident = session.get(Incident, incident_id)
-        if not incident:
-            raise HTTPException(404, "Incident not found")
-        incident.confirmations += 1
-        session.add(incident)
-        session.commit()
-        reasons = recalc_incident(session, incident)
-        return {**incident.model_dump(), "reasons": reasons}
+    @app.get("/analytics/summary")
+    def analytics_summary(
+        range: Literal["24h", "7d", "30d", "all"] = "all",
+        category: Optional[Literal["Network / IT", "Facilities", "Environmental", "Safety", "Other"]] = None,
+        evidence_level: Optional[Literal["Low", "Emerging", "Strong"]] = None,
+        location: Optional[str] = None,
+    ):
+        with Session(engine) as session:
+            return aggregate_analytics(session, range, category, evidence_level, location)
 
-@app.post("/incidents/{incident_id}/contradict")
-def contradict(incident_id: int):
-    with Session(engine) as session:
-        incident = session.get(Incident, incident_id)
-        if not incident:
-            raise HTTPException(404, "Incident not found")
-        incident.contradictions += 1
-        session.add(incident)
-        session.commit()
-        reasons = recalc_incident(session, incident)
-        return {**incident.model_dump(), "reasons": reasons}
+    def delete_incidents(incident_id=None):
+        if not cleanup_enabled:
+            raise HTTPException(404, "Development cleanup is disabled")
+        with Session(engine) as session:
+            session.connection().exec_driver_sql("BEGIN IMMEDIATE")
+            if incident_id is not None:
+                get_incident(session, incident_id)
+            ids = [incident_id] if incident_id is not None else list(session.exec(select(Incident.id)).all())
+            reports = session.exec(select(Report).where(Report.incident_id.in_(ids))).all()
+            evidence = session.exec(select(Evidence).where(Evidence.incident_id.in_(ids))).all()
+            votes = session.exec(select(Vote).where(Vote.incident_id.in_(ids))).all()
+            incidents = session.exec(select(Incident).where(Incident.id.in_(ids))).all()
+            filenames = {e.stored_filename for e in evidence} | {r.image_path.removeprefix("/uploads/") for r in reports if r.image_path and r.image_path.startswith("/uploads/")}
+            counts = {"incidents": len(incidents), "reports": len(reports), "evidence": len(evidence), "votes": len(votes),
+                      "confirmations": sum(i.confirmations for i in incidents), "contradictions": sum(i.contradictions for i in incidents)}
+            for model in (Evidence, Vote, Report):
+                session.exec(delete(model).where(model.incident_id.in_(ids)))
+            session.exec(delete(Incident).where(Incident.id.in_(ids)))
+            session.flush()
+            referenced = set(session.exec(select(Evidence.stored_filename)).all())
+            referenced |= {path.removeprefix("/uploads/") for path in session.exec(select(Report.image_path)).all() if path and path.startswith("/uploads/")}
+            session.commit()
+            removed, failed = 0, 0
+            for filename in filenames - referenced:
+                try:
+                    path = upload_path(uploads, filename)
+                    if path.is_file():
+                        path.unlink()
+                        removed += 1
+                except (ValueError, OSError):
+                    failed += 1
+                    log.warning("Could not remove an unreferenced evidence file")
+            return {**counts, "files_removed": removed, "files_not_removed": failed}
+
+    @app.delete("/dev/incidents")
+    def cleanup():
+        return delete_incidents()
+
+    @app.delete("/incidents/{incident_id}")
+    def delete_incident(incident_id: int):
+        return delete_incidents(incident_id)
+
+    return app
+
+
+app = create_app()

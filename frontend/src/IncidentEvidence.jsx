@@ -30,7 +30,10 @@ export default function IncidentEvidence({ incident, api }) {
         const response = await fetch(`${api}/incidents/${incident.id}`, { signal: controller.signal });
         if (!response.ok) throw new Error('Could not load incident evidence');
         const detail = await response.json();
-        const urls = (detail.reports || []).map((report) => resolveEvidenceUrl(report.image_path, api)).filter(Boolean);
+        const paths = Array.isArray(detail.evidence)
+          ? detail.evidence.filter((item) => item.type === 'image' || item.type === 'screenshot').map((item) => item.url)
+          : (detail.reports || []).map((report) => report.image_path);
+        const urls = paths.map((path) => resolveEvidenceUrl(path, api)).filter(Boolean);
         if (!controller.signal.aborted) {
           setImages([...new Set(urls)]);
           setFailed([]);
@@ -54,7 +57,7 @@ export default function IncidentEvidence({ incident, api }) {
 
   return <section className="incidentVisualEvidence" aria-label="Incident evidence" aria-busy={loading}>
     <h3>Evidence</h3>
-    {loading ? <div className="incidentEvidencePlaceholder" role="status">Loading evidence?</div>
+    {loading ? <div className="incidentEvidencePlaceholder" role="status">Loading evidence...</div>
       : error ? <div className="incidentEvidencePlaceholder" role="status"><span>Unable to load evidence.</span><button type="button" onClick={() => setRetry((value) => value + 1)}>Retry</button></div>
       : !main ? <div className="incidentEvidencePlaceholder"><Image size={25} aria-hidden="true" /><span>{images.length ? 'Visual evidence is unavailable' : 'No visual evidence attached'}</span></div>
       : <>
@@ -62,7 +65,7 @@ export default function IncidentEvidence({ incident, api }) {
           aria-label={`Open larger evidence image for ${incident.title}`} onClick={() => dialogRef.current?.showModal()}>
           <img src={main} alt={`Uploaded evidence for ${incident.title} at ${incident.location}`} onError={() => failImage(main)} />
         </button>
-        <div className="incidentEvidenceCaption"><b>Uploaded evidence</b><span>Image ? Reported with incident</span></div>
+        <div className="incidentEvidenceCaption"><b>Uploaded evidence</b><span>Image: Reported with incident</span></div>
         {available.length > 1 && <div className="incidentEvidenceThumbnails" aria-label="Evidence images">
           {available.map((url, index) => <button type="button" key={url} aria-label={`Show evidence image ${index + 1}`}
             aria-pressed={main === url} onClick={() => setActiveUrl(url)}>
@@ -75,7 +78,7 @@ export default function IncidentEvidence({ incident, api }) {
       <div className="incidentEvidenceDialogContent">
         <button type="button" className="incidentEvidenceClose" aria-label="Close evidence preview" autoFocus onClick={() => dialogRef.current.close()}><X size={20} aria-hidden="true" /></button>
         {main && <img src={main} alt={`Full evidence image for ${incident.title} at ${incident.location}`} onError={() => failImage(main)} />}
-        <p>Uploaded evidence ? {incident.title}</p>
+        <p>Uploaded evidence: {incident.title}</p>
       </div>
     </dialog>
   </section>;
