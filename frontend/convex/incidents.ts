@@ -4,11 +4,23 @@ import { v } from "convex/values";
 export const list = query({
   args: {},
   handler: async (ctx) => {
-    return await ctx.db
+    const incidents = await ctx.db
       .query("incidents")
       .withIndex("by_created_at")
       .order("desc")
       .collect();
+
+    return await Promise.all(
+      incidents.map(async (incident) => ({
+        ...incident,
+        reportCount: (
+          await ctx.db
+            .query("reports")
+            .withIndex("by_incident", (q) => q.eq("incidentId", incident._id))
+            .collect()
+        ).length,
+      }))
+    );
   },
 });
 
@@ -47,6 +59,24 @@ export const create = mutation({
     });
 
     return incidentId;
+  },
+});
+
+export const vote = mutation({
+  args: {
+    id: v.id("incidents"),
+    type: v.union(v.literal("confirm"), v.literal("contradict")),
+  },
+  handler: async (ctx, args) => {
+    const incident = await ctx.db.get(args.id);
+    if (!incident) throw new Error("Incident not found");
+
+    await ctx.db.patch(args.id, {
+      confirmations:
+        incident.confirmations + (args.type === "confirm" ? 1 : 0),
+      contradictions:
+        incident.contradictions + (args.type === "contradict" ? 1 : 0),
+    });
   },
 });
 
