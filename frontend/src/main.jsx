@@ -29,13 +29,16 @@ import {
 
 import './styles.css';
 import EvidenceCenter from './EvidenceCenter';
+import Analytics from './Analytics';
 import IncidentEvidence from './IncidentEvidence';
+import { API, requestJson } from './api';
 
 import {
   MapContainer,
   TileLayer,
   Marker,
   Popup,
+  useMapEvents,
 } from 'react-leaflet';
 
 import L from 'leaflet';
@@ -75,8 +78,8 @@ const BUILDING_COORDS = {
 
 function getIncidentCoordinates(incident) {
   if (
-    incident.latitude &&
-    incident.longitude
+    incident.latitude != null &&
+    incident.longitude != null
   ) {
     return [
       Number(incident.latitude),
@@ -174,9 +177,17 @@ function TimelineItem({ title, text }) {
     </div>
   );
 }
+function ReportMapPin({ enabled, coordinates, onPick }) {
+  useMapEvents({ click: (event) => { if (enabled) onPick(event.latlng.lat, event.latlng.lng); } });
+  return coordinates ? <Marker position={coordinates}><Popup>Selected report location</Popup></Marker> : null;
+}
+
 function CampusMap({
   incidents,
   onSelectIncident,
+  pickingLocation,
+  reportCoordinates,
+  onPickLocation,
 }) {
   return (
     <section className="panel mapPanel">
@@ -220,6 +231,7 @@ function CampusMap({
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
+        <ReportMapPin enabled={pickingLocation} coordinates={reportCoordinates} onPick={onPickLocation} />
         {incidents.map((incident) => {
           const coords =
             getIncidentCoordinates(
@@ -746,8 +758,8 @@ function LiveIncidents({
                   />
 
                   <TimelineItem
-                    title="AI clustering"
-                    text="Similar reports grouped into this incident."
+                    title="Report linking"
+                    text="Reports linked using location, category, time and description overlap."
                   />
 
                   {(current.confirmations ||
@@ -850,7 +862,7 @@ const MOCK_NOTIFICATIONS = [
   { id: 3, message: '3 new community confirmations', unread: true },
 ];
 
-function HeaderControls({ refresh, loading }) {
+function HeaderControls({ refresh, loading, refreshLabel = 'incidents' }) {
   const [open, setOpen] = useState(null);
   const [notice, setNotice] = useState('');
   const controlsRef = useRef(null);
@@ -900,7 +912,7 @@ function HeaderControls({ refresh, loading }) {
     <div className="headerActions" ref={controlsRef}>
       <button type="button" className="iconButton" onClick={handleRefresh}
         disabled={loading} aria-busy={loading}
-        aria-label={loading ? 'Refreshing incidents' : 'Refresh incidents'}>
+        aria-label={loading ? `Refreshing ${refreshLabel}` : `Refresh ${refreshLabel}`}>
         <RefreshCw size={18} className={loading ? 'spin' : undefined} aria-hidden="true" />
       </button>
       <div className="headerPopoverAnchor">
@@ -1085,6 +1097,9 @@ function App() {
   );
 
   async function vote(id, type) {
+    if (votePending.current) return;
+    votePending.current = true;
+    setApiError('');
     try {
       await submitVote({ id, type });
     } catch (error) {
@@ -1207,6 +1222,7 @@ function App() {
       </aside>
 
       <main>
+        {apiError && <div className="apiError" role="alert">{apiError}</div>}
         {activeView ===
           'dashboard' && (
           <>
@@ -1291,6 +1307,12 @@ function App() {
             </section>
 
             <CampusMap
+              pickingLocation={pickingLocation}
+              reportCoordinates={form.latitude != null && form.longitude != null ? [form.latitude, form.longitude] : null}
+              onPickLocation={(latitude, longitude) => {
+                setForm((current) => ({ ...current, latitude, longitude }));
+                setPickingLocation(false);
+              }}
               incidents={incidents}
               onSelectIncident={
                 setSelected
@@ -1579,6 +1601,18 @@ function App() {
                     </div>
                   </label>
 
+                  <div className="reportCoordinates">
+                    <button type="button" className="secondary" aria-pressed={pickingLocation} onClick={() => setPickingLocation((value) => !value)}>
+                      {pickingLocation ? 'Cancel map pin' : 'Pin report location on campus map'}
+                    </button>
+                    {pickingLocation && <p role="status">Click the campus map above to select this report's coordinates.</p>}
+                    <div className="fieldRow">
+                      <label>Latitude (optional)<input type="number" step="any" min="-90" max="90" value={form.latitude ?? ''} onChange={(event) => setForm({ ...form, latitude: event.target.value === '' ? null : Number(event.target.value) })} /></label>
+                      <label>Longitude (optional)<input type="number" step="any" min="-180" max="180" value={form.longitude ?? ''} onChange={(event) => setForm({ ...form, longitude: event.target.value === '' ? null : Number(event.target.value) })} /></label>
+                    </div>
+                    {form.latitude != null && <button type="button" className="secondary" onClick={() => setForm({ ...form, latitude: null, longitude: null })}>Clear coordinates</button>}
+                  </div>
+
                   <label>
                     Description
 
@@ -1616,14 +1650,15 @@ function App() {
                       </b>
 
                       <span>
-                        Upload an image to
+                        Upload an image or video (up to 10 MB) to
                         support your report.
                       </span>
                     </div>
 
                     <input
+                      key={fileKey}
                       type="file"
-                      accept="image/*"
+                      accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm"
                       onChange={(
                         event
                       ) =>
@@ -1667,6 +1702,7 @@ function App() {
                       </>
                     )}
                   </button>
+                  {reportNotice && <p role="status" className="fieldHint">{reportNotice}</p>}
                 </form>
               </div>}
               <ReporterFlow onSubmitted={(incidentId) => {
@@ -1872,23 +1908,16 @@ function App() {
 
         {activeView === 'evidence' && <EvidenceCenter />}
 
-        {activeView ===
-          'analytics' && (
-          <div className="panel">
-            <p className="eyebrow">
-              Analytics Module
-            </p>
-
-            <h1>
-              Analytics
-            </h1>
-
-            <p>
-              We will build this module
-              after the evidence module.
-            </p>
-          </div>
-        )}
+        {activeView === 'analytics' && <Analytics
+          ref={analyticsRef}
+          renderHeaderControls={(analyticsLoading) => <HeaderControls refresh={refresh} loading={analyticsLoading} refreshLabel="analytics" />}
+          onSelectIncident={async (id) => {
+            const incident = await requestJson(`/incidents/${id}`);
+            setIncidents((current) => current.some((item) => item.id === id) ? current.map((item) => item.id === id ? incident : item) : [...current, incident]);
+            setSelected(incident);
+            setActiveView('incidents');
+          }}
+        />}
       </main>
     </div>
   );

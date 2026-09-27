@@ -3166,3 +3166,11 @@ button.profile:hover,
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Live API feedback and real evidence media. */
+.apiError { margin: 0 0 16px; padding: 12px; color: var(--danger); background: var(--danger-soft); border-radius: 8px; font-size: 13px; }
+.reportCoordinates { display: grid; gap: 10px; }
+.reportCoordinates p { margin: 0; font-size: 12px; color: var(--muted); }
+.reportCoordinates button { padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; color: var(--primary); background: var(--panel); cursor: pointer; }
+.evidenceCenter .evidencePreview video { display: block; width: 100%; max-height: 320px; border-radius: 10px; background: var(--primary-soft); }
+.evidenceCenter .evidenceMediaPlaceholder { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 15px; min-height: 85px; color: var(--muted); background: var(--primary-soft); border-radius: 8px; font-size: 11px; }
