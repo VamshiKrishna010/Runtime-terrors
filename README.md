@@ -42,7 +42,7 @@ Never commit deploy keys. Create two GitHub **Environments** under
 
 | GitHub environment | Convex deploy key target | Used when |
 | --- | --- | --- |
-| `convex-development` | The shared Convex development deployment | A PR is merged into `pre-dev` or `dev` |
+| `convex-deployment` | The shared Convex development deployment | A PR is merged into `pre-dev` or `dev` |
 | `convex-production` | The production Convex deployment | A merged PR from `pre-dev` or `dev` reaches `main` |
 
 Create each scoped key in the corresponding Convex deployment’s **Settings →
