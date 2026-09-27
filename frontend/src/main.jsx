@@ -1011,14 +1011,48 @@ function ReporterFlow({ onSubmitted }) {
     setError(''); setBusy(true);
     try {
       let imageStorageId;
+      let analysis = {};
+
       if (image) {
+        const analysisForm = new FormData();
+        analysisForm.append('image', image);
+
+        const analysisResponse = await fetch('/api/evidence/analyze', {
+          method: 'POST',
+          body: analysisForm,
+        });
+
+        if (!analysisResponse.ok) {
+          const body = await analysisResponse.json().catch(() => null);
+          throw new Error(body?.detail || 'Evidence analysis failed. Please try again.');
+        }
+
+        analysis = await analysisResponse.json();
+
         const uploadUrl = await generateUploadUrl({});
-        const upload = await fetch(uploadUrl, { method: 'POST', headers: { 'Content-Type': image.type }, body: image });
+        const upload = await fetch(uploadUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': image.type },
+          body: image,
+        });
+
         if (!upload.ok) throw new Error('Evidence upload failed. Please try again.');
         imageStorageId = (await upload.json()).storageId;
       }
+
       const title = `${form.category}: ${form.description.trim().slice(0, 72)}`;
-      const result = await createReport({ title, reporterToken: form.reporterToken.trim(), category: form.category, location: form.location.trim(), description: form.description.trim(), imageStorageId });
+      const result = await createReport({
+        title,
+        reporterToken: form.reporterToken.trim(),
+        category: form.category,
+        location: form.location.trim(),
+        description: form.description.trim(),
+        imageStorageId,
+        ...(analysis.imagePhash ? { imagePhash: analysis.imagePhash } : {}),
+        ...(analysis.exifDatetime ? { exifDatetime: analysis.exifDatetime } : {}),
+        ...(analysis.exifGps ? { exifGps: analysis.exifGps } : {}),
+        ...(analysis.visionAnalysis ? { visionAnalysis: analysis.visionAnalysis } : {}),
+      });
       onSubmitted(result.incidentId);
       setForm((current) => ({ ...current, description: '' })); chooseImage(null); setStep(1);
     } catch (submitError) { setError(submitError.message || 'Unable to submit your report. Please try again.'); }
@@ -1052,6 +1086,12 @@ function App() {
 
   const [activeView, setActiveView] =
     useState('dashboard');
+
+  const [apiError, setApiError] =
+    useState('');
+
+  const [pickingLocation, setPickingLocation] =
+    useState(false);
 
   const loading = rawIncidents === undefined;
 
@@ -1307,12 +1347,6 @@ function App() {
             </section>
 
             <CampusMap
-              pickingLocation={pickingLocation}
-              reportCoordinates={form.latitude != null && form.longitude != null ? [form.latitude, form.longitude] : null}
-              onPickLocation={(latitude, longitude) => {
-                setForm((current) => ({ ...current, latitude, longitude }));
-                setPickingLocation(false);
-              }}
               incidents={incidents}
               onSelectIncident={
                 setSelected

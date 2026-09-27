@@ -1,4 +1,4 @@
-export const API = (import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000').replace(/\/$/, '');
+export const API = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
 
 export async function requestJson(path, options) {
   const response = await fetch(`${API}${path}`, options);
@@ -16,7 +16,9 @@ export async function requestJson(path, options) {
 export function mediaUrl(path) {
   if (!path) return null;
   try {
-    const url = new URL(path, `${API}/`);
+    const url = new URL(path, `${window.location.origin}${API}/`);
     return ['http:', 'https:'].includes(url.protocol) ? url.href : null;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }

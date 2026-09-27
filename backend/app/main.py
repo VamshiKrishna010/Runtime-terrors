@@ -18,6 +18,7 @@ from .database import initialize
 from .analytics import aggregate_analytics
 from .evidence import MAX_UPLOAD_BYTES, inspect_bytes, iso, utc
 from .ml import best_similarity
+from .groq_vision import analyze_image_with_groq
 from .models import Evidence, Incident, Report, Vote
 from .services import all_evidence, duplicate_analysis, incident_payload, make_evidence, now, summary, upload_path
 
@@ -74,7 +75,7 @@ def create_app(database_url=None, uploads_dir=None, allow_cleanup=None):
 
     @app.get("/health")
     def health():
-        return {"ok": True, "capabilities": {"metadata": True, "hashing": True, "visual_analysis": False}}
+        return {"ok": True, "capabilities": {"metadata": True, "hashing": True, "visual_analysis": True}}
 
     @app.get("/incidents")
     def list_incidents():
@@ -86,6 +87,45 @@ def create_app(database_url=None, uploads_dir=None, allow_cleanup=None):
     def incident_detail(incident_id: int):
         with Session(engine) as session:
             return incident_payload(session, get_incident(session, incident_id), detail=True)
+
+    @app.post("/evidence/analyze")
+    async def analyze_evidence(image: UploadFile = File(...)):
+        try:
+            data = await image.read(MAX_UPLOAD_BYTES + 1)
+
+            if len(data) > MAX_UPLOAD_BYTES:
+                raise HTTPException(413, "Evidence exceeds the 10 MB limit")
+
+            info = inspect_bytes(data, image.content_type or "")
+
+            if info["type"] != "image":
+                raise HTTPException(422, "Visual analysis currently requires an image")
+
+            temp_path = uploads / f"analysis-{uuid4().hex}{info['suffix']}"
+            temp_path.write_bytes(data)
+
+            try:
+                vision_analysis = analyze_image_with_groq(str(temp_path))
+            finally:
+                temp_path.unlink(missing_ok=True)
+
+            metadata = info["metadata"]
+
+            gps = None
+            if metadata.get("gps_latitude") is not None and metadata.get("gps_longitude") is not None:
+                gps = f"{metadata['gps_latitude']},{metadata['gps_longitude']}"
+
+            return {
+                "imagePhash": info["phash"],
+                "exifDatetime": metadata.get("capture_timestamp"),
+                "exifGps": gps,
+                "visionAnalysis": vision_analysis,
+            }
+
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from error
+        finally:
+            await image.close()
 
     @app.post("/reports", status_code=201)
     async def create_report(

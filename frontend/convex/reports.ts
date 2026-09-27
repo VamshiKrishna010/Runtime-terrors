@@ -53,6 +53,10 @@ export const createWithIncident = mutation({
     latitude: v.optional(v.number()),
     longitude: v.optional(v.number()),
     imageStorageId: v.optional(v.id("_storage")),
+    imagePhash: v.optional(v.string()),
+    exifDatetime: v.optional(v.string()),
+    exifGps: v.optional(v.string()),
+    visionAnalysis: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const createdAt = Date.now();
@@ -69,6 +73,15 @@ export const createWithIncident = mutation({
       createdAt,
     });
 
+    let duplicateEvidence = false;
+
+    if (args.imagePhash) {
+      const existingReports = await ctx.db.query("reports").collect();
+      duplicateEvidence = existingReports.some(
+        (report) => report.imagePhash === args.imagePhash
+      );
+    }
+
     const reportId = await ctx.db.insert("reports", {
       incidentId,
       reporterToken: args.reporterToken,
@@ -78,7 +91,11 @@ export const createWithIncident = mutation({
       latitude: args.latitude,
       longitude: args.longitude,
       imageStorageId: args.imageStorageId,
-      duplicateEvidence: false,
+      imagePhash: args.imagePhash,
+      exifDatetime: args.exifDatetime,
+      exifGps: args.exifGps,
+      visionAnalysis: args.visionAnalysis,
+      duplicateEvidence,
       semanticSimilarity: 0,
       createdAt,
     });
