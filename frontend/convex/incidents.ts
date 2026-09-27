@@ -80,6 +80,26 @@ export const vote = mutation({
   },
 });
 
+export const applyScore = mutation({
+  args: {
+    id: v.id("incidents"),
+    supportScore: v.number(),
+    evidenceLevel: v.union(v.literal("Low"), v.literal("Emerging"), v.literal("Strong")),
+    reasons: v.array(v.string()),
+  },
+  handler: async (ctx, args) => {
+    if (args.supportScore < 0 || args.supportScore > 100) {
+      throw new Error("Support score must be between 0 and 100");
+    }
+    await ctx.db.patch(args.id, {
+      supportScore: Math.round(args.supportScore),
+      evidenceLevel: args.evidenceLevel,
+      reasons: args.reasons,
+      updatedAt: Date.now(),
+    });
+  },
+});
+
 export const upsertFromBackend = mutation({
   args: {
     sqliteIncidentId: v.number(),

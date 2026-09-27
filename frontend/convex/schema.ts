@@ -16,6 +16,8 @@ export default defineSchema({
 
     confirmations: v.number(),
     contradictions: v.number(),
+    reasons: v.optional(v.array(v.string())),
+    updatedAt: v.optional(v.number()),
 
     createdAt: v.number(),
 })
@@ -46,6 +48,7 @@ export default defineSchema({
     visionAnalysis: v.optional(v.string()),
 
     semanticSimilarity: v.number(),
+    embedding: v.optional(v.array(v.number())),
 
     createdAt: v.number(),
   })
