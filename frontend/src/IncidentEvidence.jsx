@@ -1,76 +1,36 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
+import { useQuery } from 'convex/react';
 import { Image, X } from 'lucide-react';
+import { api } from '../convex/_generated/api';
 
-export function resolveEvidenceUrl(path, api) {
-  if (typeof path !== 'string' || !path.trim()) return null;
-  try {
-    const url = new URL(path, `${api}/`);
-    return ['http:', 'https:'].includes(url.protocol) ? url.href : null;
-  } catch {
-    return null;
-  }
-}
-
-export default function IncidentEvidence({ incident, api }) {
-  const [images, setImages] = useState([]);
-  const [failed, setFailed] = useState([]);
+export default function IncidentEvidence({ incident }) {
+  const reports = useQuery(api.reports.byIncident, { incidentId: incident.id });
   const [activeUrl, setActiveUrl] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-  const [retry, setRetry] = useState(0);
+  const [failed, setFailed] = useState([]);
   const dialogRef = useRef(null);
   const triggerRef = useRef(null);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    setLoading(true);
-    setError(false);
-    const load = async () => {
-      try {
-        const response = await fetch(`${api}/incidents/${incident.id}`, { signal: controller.signal });
-        if (!response.ok) throw new Error('Could not load incident evidence');
-        const detail = await response.json();
-        const paths = Array.isArray(detail.evidence)
-          ? detail.evidence.filter((item) => item.type === 'image' || item.type === 'screenshot').map((item) => item.url)
-          : (detail.reports || []).map((report) => report.image_path);
-        const urls = paths.map((path) => resolveEvidenceUrl(path, api)).filter(Boolean);
-        if (!controller.signal.aborted) {
-          setImages([...new Set(urls)]);
-          setFailed([]);
-        }
-      } catch (error) {
-        if (!controller.signal.aborted) setError(true);
-      } finally {
-        if (!controller.signal.aborted) setLoading(false);
-      }
-    };
-    load();
-    return () => controller.abort();
-  }, [incident, api, retry]);
+  if (reports === undefined) {
+    return <section className="incidentVisualEvidence" aria-busy="true"><h3>Evidence</h3><div className="incidentEvidencePlaceholder" role="status">Loading evidence…</div></section>;
+  }
 
+  const images = reports.map((report) => report.imageUrl).filter(Boolean);
   const available = images.filter((url) => !failed.includes(url));
   const main = available.includes(activeUrl) ? activeUrl : available[0];
-  const failImage = (url) => {
-    setFailed((current) => [...new Set([...current, url])]);
-    if (dialogRef.current?.open) dialogRef.current.close();
-  };
+  const failImage = (url) => setFailed((current) => [...new Set([...current, url])]);
 
-  return <section className="incidentVisualEvidence" aria-label="Incident evidence" aria-busy={loading}>
+  return <section className="incidentVisualEvidence" aria-label="Incident evidence">
     <h3>Evidence</h3>
-    {loading ? <div className="incidentEvidencePlaceholder" role="status">Loading evidence...</div>
-      : error ? <div className="incidentEvidencePlaceholder" role="status"><span>Unable to load evidence.</span><button type="button" onClick={() => setRetry((value) => value + 1)}>Retry</button></div>
-      : !main ? <div className="incidentEvidencePlaceholder"><Image size={25} aria-hidden="true" /><span>{images.length ? 'Visual evidence is unavailable' : 'No visual evidence attached'}</span></div>
+    {!main ? <div className="incidentEvidencePlaceholder"><Image size={25} aria-hidden="true" /><span>No visual evidence attached</span></div>
       : <>
         <button type="button" className="incidentEvidenceMain" ref={triggerRef}
           aria-label={`Open larger evidence image for ${incident.title}`} onClick={() => dialogRef.current?.showModal()}>
           <img src={main} alt={`Uploaded evidence for ${incident.title} at ${incident.location}`} onError={() => failImage(main)} />
         </button>
-        <div className="incidentEvidenceCaption"><b>Uploaded evidence</b><span>Image: Reported with incident</span></div>
+        <div className="incidentEvidenceCaption"><b>Uploaded evidence</b><span>{reports.length} report{reports.length === 1 ? '' : 's'} in this incident</span></div>
         {available.length > 1 && <div className="incidentEvidenceThumbnails" aria-label="Evidence images">
           {available.map((url, index) => <button type="button" key={url} aria-label={`Show evidence image ${index + 1}`}
-            aria-pressed={main === url} onClick={() => setActiveUrl(url)}>
-            <img src={url} alt={`Evidence thumbnail ${index + 1} for ${incident.title}`} onError={() => failImage(url)} />
-          </button>)}
+            aria-pressed={main === url} onClick={() => setActiveUrl(url)}><img src={url} alt={`Evidence thumbnail ${index + 1} for ${incident.title}`} onError={() => failImage(url)} /></button>)}
         </div>}
       </>}
     <dialog ref={dialogRef} className="incidentEvidenceDialog" aria-label={`Evidence preview for ${incident.title}`}
@@ -78,7 +38,7 @@ export default function IncidentEvidence({ incident, api }) {
       <div className="incidentEvidenceDialogContent">
         <button type="button" className="incidentEvidenceClose" aria-label="Close evidence preview" autoFocus onClick={() => dialogRef.current.close()}><X size={20} aria-hidden="true" /></button>
         {main && <img src={main} alt={`Full evidence image for ${incident.title} at ${incident.location}`} onError={() => failImage(main)} />}
-        <p>Uploaded evidence: {incident.title}</p>
+        <p>Community supplied evidence · {incident.title}</p>
       </div>
     </dialog>
   </section>;

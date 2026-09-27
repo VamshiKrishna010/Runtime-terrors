@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import { ConvexProvider, ConvexReactClient, useMutation, useQuery } from 'convex/react';
+import { api } from '../convex/_generated/api';
 
 import {
   ShieldCheck,
@@ -41,7 +43,6 @@ import {
 
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-
 
 delete L.Icon.Default.prototype._getIconUrl;
 
@@ -137,6 +138,15 @@ function Badge({ level }) {
       {safeLevel}
     </span>
   );
+}
+
+function incidentReasons(incident) {
+  if (incident.reasons?.length) return incident.reasons;
+  const reasons = [`${incident.report_count || 0} community report${incident.report_count === 1 ? '' : 's'} currently support this incident.`];
+  if (incident.confirmations) reasons.push(`${incident.confirmations} community confirmation${incident.confirmations === 1 ? '' : 's'} received.`);
+  if (incident.contradictions) reasons.push(`${incident.contradictions} report${incident.contradictions === 1 ? '' : 's'} flagged a conflicting observation.`);
+  reasons.push('The support score will update as the scoring service analyzes new evidence.');
+  return reasons;
 }
 
 
@@ -607,7 +617,7 @@ function LiveIncidents({
                 />
               </div>
 
-              <IncidentEvidence key={current.id} incident={current} api={API} />
+              <IncidentEvidence key={current.id} incident={current} />
 
               <div className="bigEvidenceScore">
                 <div>
@@ -954,10 +964,88 @@ function HeaderControls({ refresh, loading, refreshLabel = 'incidents' }) {
   );
 }
 
+function ReporterFlow({ onSubmitted }) {
+  const createReport = useMutation(api.reports.createWithIncident);
+  const generateUploadUrl = useMutation(api.reports.generateUploadUrl);
+  const [step, setStep] = useState(1);
+  const [form, setForm] = useState({ reporterToken: 'demo-user-1', category: 'Network / IT', location: 'ITE Building', description: '' });
+  const [image, setImage] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [stream, setStream] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const videoRef = useRef(null);
+
+  useEffect(() => () => stream?.getTracks().forEach((track) => track.stop()), [stream]);
+  useEffect(() => { if (stream && videoRef.current) videoRef.current.srcObject = stream; }, [stream]);
+  useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
+
+  const chooseImage = (file) => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setImage(file || null);
+    setPreviewUrl(file ? URL.createObjectURL(file) : null);
+  };
+  const update = (key, value) => setForm((current) => ({ ...current, [key]: value }));
+  const validateStep = () => {
+    if (step === 1 && (!form.reporterToken.trim() || !form.location.trim())) return 'Add a reporter token and location to continue.';
+    if (step === 2 && form.description.trim().length < 10) return 'Describe what happened in at least 10 characters.';
+    return '';
+  };
+  const next = () => { const message = validateStep(); if (message) setError(message); else { setError(''); setStep((value) => Math.min(3, value + 1)); } };
+  const startCamera = async () => {
+    setError('');
+    try { setStream(await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false })); }
+    catch { setError('Camera access was unavailable. You can still attach a photo from your device.'); }
+  };
+  const stopCamera = () => { stream?.getTracks().forEach((track) => track.stop()); setStream(null); };
+  const capture = () => {
+    const video = videoRef.current;
+    if (!video?.videoWidth) return setError('The camera is still starting. Try again in a moment.');
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video, 0, 0);
+    canvas.toBlob((blob) => { if (blob) chooseImage(new File([blob], `veripulse-${Date.now()}.jpg`, { type: 'image/jpeg' })); }, 'image/jpeg', 0.9);
+    stopCamera();
+  };
+  const submit = async () => {
+    setError(''); setBusy(true);
+    try {
+      let imageStorageId;
+      if (image) {
+        const uploadUrl = await generateUploadUrl({});
+        const upload = await fetch(uploadUrl, { method: 'POST', headers: { 'Content-Type': image.type }, body: image });
+        if (!upload.ok) throw new Error('Evidence upload failed. Please try again.');
+        imageStorageId = (await upload.json()).storageId;
+      }
+      const title = `${form.category}: ${form.description.trim().slice(0, 72)}`;
+      const result = await createReport({ title, reporterToken: form.reporterToken.trim(), category: form.category, location: form.location.trim(), description: form.description.trim(), imageStorageId });
+      onSubmitted(result.incidentId);
+      setForm((current) => ({ ...current, description: '' })); chooseImage(null); setStep(1);
+    } catch (submitError) { setError(submitError.message || 'Unable to submit your report. Please try again.'); }
+    finally { setBusy(false); }
+  };
+
+  return <section className="panel formPanel reporterFlow">
+    <div className="panelHeader"><div><p className="panelEyebrow">Community report</p><h2>Report an incident</h2></div><span className="liveBadge"><span />Live Convex sync</span></div>
+    <ol className="reportSteps" aria-label="Report progress">{['Details', 'What happened', 'Evidence & review'].map((label, index) => <li key={label} className={step === index + 1 ? 'active' : step > index + 1 ? 'complete' : ''}><span>{index + 1}</span>{label}</li>)}</ol>
+    {error && <div className="reportError" role="alert"><AlertTriangle size={16} />{error}</div>}
+    {step === 1 && <div className="reportStep"><div className="fieldRow"><label>Reporter token<input value={form.reporterToken} onChange={(event) => update('reporterToken', event.target.value)} placeholder="Your private handle" /></label><label>Category<select value={form.category} onChange={(event) => update('category', event.target.value)}><option>Network / IT</option><option>Facilities</option><option>Environmental</option><option>Safety</option><option>Other</option></select></label></div><label>Location<div className="inputWithIcon"><MapPin size={16} /><input value={form.location} onChange={(event) => update('location', event.target.value)} placeholder="Where is this happening?" /></div></label></div>}
+    {step === 2 && <div className="reportStep"><label>What happened?<textarea autoFocus value={form.description} onChange={(event) => update('description', event.target.value)} placeholder="Describe what you saw, when it started, and anything that could help someone verify it." /><small className="fieldHint">Avoid names, phone numbers, or other private details.</small></label></div>}
+    {step === 3 && <div className="reportStep"><div className="cameraActions"><button type="button" className="secondary" onClick={startCamera} disabled={Boolean(stream)}><Camera size={16} />Open camera</button><label className="secondary uploadTrigger"><Upload size={16} />Choose photo<input type="file" accept="image/*" capture="environment" onChange={(event) => chooseImage(event.target.files?.[0])} /></label></div>{stream && <div className="cameraPreview"><video ref={videoRef} autoPlay playsInline muted /><div><button type="button" className="primary" onClick={capture}><Camera size={16} />Capture photo</button><button type="button" className="secondary" onClick={stopCamera}>Cancel</button></div></div>}{previewUrl && <figure className="selectedEvidence"><img src={previewUrl} alt="Evidence selected for upload" /><figcaption><Camera size={14} />{image?.name}<button type="button" onClick={() => chooseImage(null)}>Remove</button></figcaption></figure>}<div className="reportReview"><b>{form.category}</b><span>{form.location}</span><p>{form.description}</p></div></div>}
+    <div className="reportNav"><button type="button" className="secondary" onClick={() => { setError(''); setStep((value) => Math.max(1, value - 1)); }} disabled={step === 1 || busy}>Back</button>{step < 3 ? <button type="button" className="primary" onClick={next}>Continue <ChevronRight size={16} /></button> : <button type="button" className="primary" disabled={busy} onClick={submit}>{busy ? <><RefreshCw className="spin" size={16} />Submitting…</> : <><BrainCircuit size={16} />Submit report</>}</button>}</div>
+  </section>;
+}
+
 function App() {
-  const analyticsRef = useRef(null);
-  const [incidents, setIncidents] =
-    useState([]);
+  const rawIncidents = useQuery(api.incidents.list);
+  const submitVote = useMutation(api.incidents.vote);
+  const incidents = useMemo(() => (rawIncidents || []).map((incident) => ({
+    ...incident,
+    id: incident._id,
+    evidence_level: incident.evidenceLevel,
+    support_score: incident.supportScore,
+    report_count: incident.reportCount,
+  })), [rawIncidents]);
 
   const [selected, setSelected] =
     useState(null);
@@ -965,50 +1053,20 @@ function App() {
   const [activeView, setActiveView] =
     useState('dashboard');
 
-  const [form, setForm] = useState({
-    reporter_token: 'demo-user-1',
-    description: '',
-    category: 'Network / IT',
-    location: 'ITE Building',
-  });
-
-  const [apiError, setApiError] = useState('');
-  const [reportNotice, setReportNotice] = useState('');
-  const [pickingLocation, setPickingLocation] = useState(false);
-  const votePending = useRef(false);
-  const reportPending = useRef(false);
-  const [fileKey, setFileKey] = useState(0);
-
-  const [image, setImage] =
-    useState(null);
-
-  const [busy, setBusy] =
-    useState(false);
-
-  const [loading, setLoading] =
-    useState(true);
+  const loading = rawIncidents === undefined;
 
   const [
     sidebarOpen,
     setSidebarOpen,
   ] = useState(false);
 
-  const refresh = async () => {
-    if (activeView === 'analytics') return analyticsRef.current?.refresh();
-    try {
-      setLoading(true);
-      const data = await requestJson('/incidents');
-      setIncidents(data);
-      setSelected((current) => current ? data.find((incident) => incident.id === current.id) || null : null);
-      setApiError('');
-    } catch (error) {
-      setApiError(error.message);
-    } finally { setLoading(false); }
-  };
+  const refresh = async () => undefined;
 
   useEffect(() => {
-    refresh();
-  }, []);
+    if (!selected) return;
+    const current = incidents.find((incident) => incident.id === selected.id);
+    if (current) setSelected(current);
+  }, [incidents, selected]);
 
   const stats = useMemo(
     () => ({
@@ -1038,42 +1096,18 @@ function App() {
     [incidents]
   );
 
-  async function submit(event) {
-    event.preventDefault();
-    if (reportPending.current) return;
-    reportPending.current = true;
-    setBusy(true);
-    setApiError('');
-    setReportNotice('');
-    try {
-      const fd = new FormData();
-      Object.entries(form).forEach(([key, value]) => { if (value != null && value !== '') fd.append(key, value); });
-      if (image) fd.append('image', image);
-      const result = await requestJson('/reports', { method: 'POST', body: fd });
-      setForm((current) => ({ ...current, description: '', latitude: null, longitude: null }));
-      setImage(null);
-      setFileKey((key) => key + 1);
-      setPickingLocation(false);
-      await refresh();
-      setSelected(result.incident);
-      setReportNotice(`Report saved to incident ${result.incident.id}.`);
-    } catch (error) { setApiError(error.message); }
-    finally { setBusy(false); reportPending.current = false; }
-  }
-
   async function vote(id, type) {
     if (votePending.current) return;
     votePending.current = true;
     setApiError('');
     try {
-      const result = await requestJson(`/incidents/${id}/${type}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reporter_token: form.reporter_token }),
-      });
-      setIncidents((items) => items.map((item) => item.id === id ? result : item));
-      setSelected((current) => current?.id === id ? result : current);
-    } catch (error) { setApiError(error.message); }
-    finally { votePending.current = false; }
+      await submitVote({ id, type });
+    } catch (error) {
+      console.error(
+        'Failed to submit vote',
+        error
+      );
+    }
   }
 
   return (
@@ -1461,7 +1495,7 @@ function App() {
                   )}
               </div>
 
-              <div className="panel formPanel">
+              {false && <div className="panel formPanel">
                 <div className="panelHeader">
                   <div>
                     <p className="panelEyebrow">
@@ -1670,7 +1704,11 @@ function App() {
                   </button>
                   {reportNotice && <p role="status" className="fieldHint">{reportNotice}</p>}
                 </form>
-              </div>
+              </div>}
+              <ReporterFlow onSubmitted={(incidentId) => {
+                setActiveView('dashboard');
+                setSelected({ id: incidentId });
+              }} />
             </section>
 
             {selected && (
@@ -1739,10 +1777,7 @@ function App() {
                     </h4>
 
                     <div className="reasons">
-                      {(
-                        selected.reasons ||
-                        []
-                      ).map(
+                      {incidentReasons(selected).map(
                         (
                           reason,
                           index
@@ -1888,6 +1923,11 @@ function App() {
   );
 }
 
-createRoot(
-  document.getElementById('root')
-).render(<App />);
+const convexUrl = import.meta.env.CONVEX_URL || import.meta.env.VITE_CONVEX_URL;
+const root = createRoot(document.getElementById('root'));
+
+if (!convexUrl) {
+  root.render(<main className="app"><section className="panel" style={{ margin: 32 }}><p className="eyebrow">Configuration needed</p><h1>Convex is not configured</h1><p>Add <code>CONVEX_URL</code> to the repository <code>.env</code>, then restart Vite.</p></section></main>);
+} else {
+  root.render(<ConvexProvider client={new ConvexReactClient(convexUrl)}><App /></ConvexProvider>);
+}

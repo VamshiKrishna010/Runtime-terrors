@@ -29,6 +29,29 @@ npm run dev
 
 Open http://localhost:5173.
 
+## Convex delivery through GitHub
+
+The frontend reads the public Convex URL from the repository-level `.env`:
+
+```env
+CONVEX_URL=https://your-development-deployment.convex.cloud
+```
+
+Never commit deploy keys. Create two GitHub **Environments** under
+`Settings → Environments` and add a secret named `CONVEX_DEPLOY_KEY` to each:
+
+| GitHub environment | Convex deploy key target | Used when |
+| --- | --- | --- |
+| `convex-development` | The shared Convex development deployment | A PR is merged into `pre-dev` or `dev` |
+| `convex-production` | The production Convex deployment | A merged PR from `pre-dev` or `dev` reaches `main` |
+
+Create each scoped key in the corresponding Convex deployment’s **Settings →
+Deploy keys** page, with the `deployment:deploy` permission. The
+`Convex delivery` workflow runs frontend and backend CI first, then invokes
+`npx convex deploy` with that environment’s key. A direct push to `main` does
+not deploy production; only a merged pull request whose source is `pre-dev` or
+`dev` can do so.
+
 ## Run with Tilt
 
 Install [Tilt](https://docs.tilt.dev/install.html), Node.js with npm, and Python
