@@ -11,6 +11,8 @@ from .ml import best_similarity
 from .evidence import analyze_image, phash_distance
 from .scoring import evidence_score
 from .convex_client import convex_mutation, upload_image
+from .groq_vision import analyze_image_with_groq
+
 
 BASE = Path(__file__).resolve().parent.parent
 UPLOADS = BASE / "uploads"
@@ -133,6 +135,7 @@ async def create_report(
         image_path = None
         image_storage_id = None
         phash = exif_dt = exif_gps = None
+        vision_analysis = None
         duplicate = False
 
         if image and image.filename:
@@ -156,6 +159,8 @@ async def create_report(
             phash = info["phash"]
             exif_dt = info["exif_datetime"]
             exif_gps = info["exif_gps"]
+            # Analyze the image using Groq Vision.
+            vision_analysis = analyze_image_with_groq(str(dest))
 
             # Check whether similar image evidence already exists.
             if phash:
@@ -244,8 +249,12 @@ async def create_report(
         if exif_dt is not None:
             convex_report["exifDatetime"] = exif_dt
 
+
         if exif_gps is not None:
             convex_report["exifGps"] = exif_gps
+
+        if vision_analysis is not None:
+            convex_report["visionAnalysis"] = vision_analysis
 
         # Save the report metadata in Convex.
         convex_report_id = await convex_mutation(
