@@ -18,7 +18,7 @@ from .database import initialize
 from .analytics import aggregate_analytics
 from .evidence import MAX_UPLOAD_BYTES, inspect_bytes, iso, utc
 from .ml import best_similarity
-from .groq_vision import analyze_image_with_groq
+from .groq_vision import analyze_image_with_groq, compare_image_to_claim
 from .qwen_authenticity import analyze_image_authenticity
 from .models import Evidence, Incident, Report, Vote
 from .services import all_evidence, duplicate_analysis, incident_payload, make_evidence, now, summary, upload_path
@@ -90,7 +90,7 @@ def create_app(database_url=None, uploads_dir=None, allow_cleanup=None):
             return incident_payload(session, get_incident(session, incident_id), detail=True)
 
     @app.post("/evidence/analyze")
-    async def analyze_evidence(image: UploadFile = File(...)):
+    async def analyze_evidence(image: UploadFile = File(...), description: str = Form("")):
         try:
             data = await image.read(MAX_UPLOAD_BYTES + 1)
 
@@ -108,6 +108,10 @@ def create_app(database_url=None, uploads_dir=None, allow_cleanup=None):
             try:
                 vision_analysis = analyze_image_with_groq(str(temp_path))
                 authenticity = analyze_image_authenticity(str(temp_path))
+                visual_comparison = compare_image_to_claim(
+                    str(temp_path),
+                    description,
+                )
             finally:
                 temp_path.unlink(missing_ok=True)
 
@@ -123,6 +127,7 @@ def create_app(database_url=None, uploads_dir=None, allow_cleanup=None):
                 "exifGps": gps,
                 "visionAnalysis": vision_analysis,
                 "authenticity": authenticity,
+                "visualComparison": visual_comparison,
             }
 
         except ValueError as error:
@@ -196,10 +201,27 @@ def create_app(database_url=None, uploads_dir=None, allow_cleanup=None):
                 if info:
                     saved = upload_path(uploads, filename)
                     saved.write_bytes(data)
+
+                    # Compare the visible image evidence with the written report.
+                    # compare_image_to_claim handles model/API failures by returning
+                    # an "unavailable" result instead of blocking submission.
+                    visual_comparison = compare_image_to_claim(
+                        str(saved),
+                        description,
+                    )
+                    report.visual_match = visual_comparison["match"]
+                    report.visual_match_confidence = visual_comparison["confidence"]
+                    report.visual_match_reason = visual_comparison["reason"]
+
                     item = make_evidence(report, filename, original, info, len(data))
                     session.add(item)
                     session.flush()
-                    report.duplicate_evidence = bool(duplicate_analysis(item, session.exec(select(Evidence)).all())["duplicate_of"])
+                    report.duplicate_evidence = bool(
+                        duplicate_analysis(
+                            item,
+                            session.exec(select(Evidence)).all(),
+                        )["duplicate_of"]
+                    )
                     session.add(report)
                 result = incident_payload(session, candidate, detail=True, persist=True)
                 if info:

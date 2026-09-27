@@ -6,6 +6,7 @@ def evidence_score(
     unique_images: int,
     duplicate_images: int,
     location_consistency: float = 0.0,
+    visual_match: str = "unavailable",
 ) -> tuple[float, str, list[str]]:
     # Interpretable hackathon score. This is NOT a probability of truth.
     score = 0.0
@@ -42,6 +43,22 @@ def evidence_score(
     score -= contradiction_penalty
     if contradiction_penalty:
         reasons.append(f"{contradictions} contradiction(s): -{contradiction_penalty:.0f}")
+
+    visual_points = {
+        "yes": 6,
+        "partial": 3,
+        "no": -6,
+        "unavailable": 0,
+    }.get(visual_match, 0)
+
+    score += visual_points
+
+    if visual_match != "unavailable":
+        sign = "+" if visual_points >= 0 else ""
+        reasons.append(
+            f"image/report visual comparison ({visual_match}): "
+            f"{sign}{visual_points}"
+        )
 
     score = round(max(0.0, min(score, 100.0)), 1)
     level = "Low" if score < 35 else "Emerging" if score < 70 else "Strong"

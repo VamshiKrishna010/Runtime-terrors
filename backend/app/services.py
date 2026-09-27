@@ -84,7 +84,13 @@ def evidence_payload(item, report, incident, collection, duplicates=None):
         "provenance": {"source": item.source, "in_app_capture": False if item.source == "gallery_upload" else None,
                        "server_received_at": iso(item.uploaded_at), "reporter_id": f"report-{report.id}"},
         "duplicate_analysis": duplicate, "time_consistency": time, "location_consistency": location,
-        "content_consistency": {"reported_claim": report.description, "visual_summary": None, "score": None, "status": "unavailable"},
+        "content_consistency": {
+            "reported_claim": report.description,
+            "visual_summary": report.visual_match_reason,
+            "score": report.visual_match_confidence,
+            "status": report.visual_match or "unavailable",
+            "reason": report.visual_match_reason,
+        },
         "status": status, "support_contribution": contribution,
         "review_state": item.review_state, "timeline": item.timeline,
     }
@@ -118,7 +124,16 @@ def incident_payload(session, incident, detail=False, evidence=None, persist=Fal
     unique = sum(bool(e["perceptual_hash"]) and not e["duplicate_analysis"]["duplicate_of"] for e in attached)
     score, level, reasons = evidence_score(len({r.reporter_token for r in reports}), average,
         incident.confirmations, incident.contradictions, unique, duplicates,
-        sum(r.location.strip().casefold() == incident.location.strip().casefold() for r in reports) / len(reports) if reports else 0)
+        sum(r.location.strip().casefold() == incident.location.strip().casefold() for r in reports) / len(reports) if reports else 0,
+        next(
+            (
+                r.visual_match
+                for r in reversed(reports)
+                if r.visual_match in {"yes", "partial", "no", "unavailable"}
+            ),
+            "unavailable",
+        ),
+    )
     if persist:
         incident.support_score, incident.evidence_level, incident.updated_at = score, level, now()
         session.add(incident)
