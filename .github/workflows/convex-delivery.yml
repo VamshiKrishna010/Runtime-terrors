@@ -48,9 +48,25 @@ jobs:
       - run: python -m compileall -q app
         working-directory: backend
 
+  ml-ci:
+    name: ML CI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            ml_service/requirements.txt
+            ml_service/requirements-dev.txt
+      - run: python -m pip install -r ml_service/requirements-dev.txt
+      - run: python -m ml_service.validate_seed
+      - run: python -m unittest discover -s ml_service/tests -v
+
   deploy-development:
     name: Deploy Convex development
-    needs: [frontend-ci, backend-ci]
+    needs: [frontend-ci, backend-ci, ml-ci]
     if: >-
       github.event_name == 'push' &&
       (github.ref == 'refs/heads/pre-dev' || github.ref == 'refs/heads/dev')
@@ -73,7 +89,7 @@ jobs:
 
   deploy-production:
     name: Deploy Convex production
-    needs: [frontend-ci, backend-ci]
+    needs: [frontend-ci, backend-ci, ml-ci]
     if: >-
       github.event_name == 'pull_request' &&
       github.event.action == 'closed' &&
