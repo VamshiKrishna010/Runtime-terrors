@@ -7,6 +7,24 @@ export const DEFAULT_FILTERS = { range: 'all', category: '', evidence_level: '',
 export function analyticsQuery(filters) {
   return new URLSearchParams(Object.entries(filters).filter(([, value]) => value !== '')).toString();
 }
+export function normalizeAnalytics(value) {
+  if (!value || typeof value !== 'object' || !value.summary || !Number.isFinite(value.summary.active_incidents)) throw new Error('Unsupported analytics response');
+  const numbers = (input, keys) => Object.fromEntries(keys.map((key) => [key, Number.isFinite(input?.[key]) ? input[key] : 0]));
+  const array = (input) => Array.isArray(input) ? input.filter((item) => item && typeof item === 'object') : [];
+  const community = numbers(value.community, ['confirmations', 'contradictions']);
+  const denominator = community.confirmations + community.contradictions;
+  return { ...value,
+    summary: numbers(value.summary, ['active_incidents', 'total_reports', 'confirmations', 'contradictions', 'evidence_items', 'strong_incidents']),
+    activity: array(value.activity), categories: array(value.categories), locations: array(value.locations),
+    support_distribution: array(value.support_distribution),
+    recent_incidents: array(value.recent_incidents).map((item) => ({ ...item, evidence_level: ['Low', 'Emerging', 'Strong'].includes(item.evidence_level) ? item.evidence_level : 'Low' })),
+    available_locations: Array.isArray(value.available_locations) ? value.available_locations.filter((item) => typeof item === 'string') : [],
+    evidence_levels: numbers(value.evidence_levels, ['Low', 'Emerging', 'Strong']),
+    evidence_health: numbers(value.evidence_health, ['unique', 'exact_duplicates', 'near_duplicates', 'metadata_conflicts', 'location_conflicts', 'timestamp_conflicts', 'reviewed', 'flagged']),
+    reporting: numbers(value.reporting, ['distinct_reporters', 'average_reports_per_incident', 'multi_reporter_incidents', 'single_reporter_incidents']),
+    community: { ...community, confirmation_ratio: denominator > 0 ? community.confirmations / denominator : null },
+  };
+}
 const CATEGORIES = ['Network / IT', 'Facilities', 'Environmental', 'Safety', 'Other'];
 const formatDate = (value, short = false) => new Date(value).toLocaleString('en-US', {
   timeZone: 'UTC', month: 'short', day: 'numeric', ...(short ? {} : { year: 'numeric', hour: 'numeric', minute: '2-digit' }),
@@ -119,7 +137,7 @@ const Analytics = forwardRef(function Analytics({ renderHeaderControls, onSelect
     controllerRef.current = controller;
     setLoading(true); setError(false);
     try {
-      const result = await requestJson(`/analytics/summary?${analyticsQuery(filters)}`, { signal: controller.signal });
+      const result = normalizeAnalytics(await requestJson(`/analytics/summary?${analyticsQuery(filters)}`, { signal: controller.signal }));
       if (!controller.signal.aborted) { setData(result); setLocations(result.available_locations); }
     } catch (error) { if (!controller.signal.aborted) setError(true); }
     finally { if (!controller.signal.aborted) setLoading(false); }
@@ -143,7 +161,7 @@ const Analytics = forwardRef(function Analytics({ renderHeaderControls, onSelect
       <label>Location<select value={filters.location} onChange={(event) => change('location', event.target.value)}><option value="">All locations</option>{locations.map((value) => <option key={value}>{value}</option>)}</select></label>
       <button type="button" onClick={() => setFilters({ ...DEFAULT_FILTERS })}>Reset filters</button>
     </div>
-    <p className="analyticsScope">Time range selects clusters created in the window and their reports/uploads in that window. Votes, support and review states are current totals for those clusters. Active means current clusters; no resolved status is tracked.</p>
+    <p className="analyticsScope">Analytics uses the FastAPI SQLite dataset; Convex-only reports are not included. Time range selects clusters created in the window and their reports/uploads in that window. Votes, support and review states are current totals for those clusters. Active means current clusters; no resolved status is tracked.</p>
     {loading ? <AnalyticsLoading /> : error ? <AnalyticsError retry={load} /> : data && <AnalyticsContent data={data} onSelectIncident={selectIncident} navigationError={navigationError} />}
   </div>;
 });
