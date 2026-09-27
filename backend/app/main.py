@@ -102,53 +102,74 @@ async def create_report(
         incidents = session.exec(select(Incident)).all()
         candidate = None
         best = 0.0
+
         for inc in incidents:
-            reports = session.exec(select(Report).where(Report.incident_id == inc.id)).all()
+            reports = session.exec(
+                select(Report).where(Report.incident_id == inc.id)
+            ).all()
+
             texts = [r.description for r in reports]
             sim = best_similarity(description, texts)
             same_place = location.strip().lower() == inc.location.strip().lower()
+
             if same_place and sim > best:
                 best, candidate = sim, inc
 
-        # Conservative threshold for joining an existing incident.
+        # Create a new incident if no suitable existing incident was found.
         if candidate is None or best < 0.20:
-            candidate = Incident(title=description[:70], category=category, location=location,
-                                 latitude=latitude, longitude=longitude)
+            candidate = Incident(
+                title=description[:70],
+                category=category,
+                location=location,
+                latitude=latitude,
+                longitude=longitude,
+            )
             session.add(candidate)
             session.commit()
             session.refresh(candidate)
             best = 0.0
 
-            image_path = None
-            image_storage_id = None
-            phash = exif_dt = exif_gps = None
-            duplicate = False
+        # Analyze and store optional image evidence.
+        image_path = None
+        image_storage_id = None
+        phash = exif_dt = exif_gps = None
+        duplicate = False
 
-            if image and image.filename:
-                suffix = Path(image.filename).suffix.lower() or ".jpg"
-                filename = f"{uuid4().hex}{suffix}"
-                dest = UPLOADS / filename
+        if image and image.filename:
+            suffix = Path(image.filename).suffix.lower() or ".jpg"
+            filename = f"{uuid4().hex}{suffix}"
+            dest = UPLOADS / filename
 
-                image_bytes = await image.read()
-                dest.write_bytes(image_bytes)
+            image_bytes = await image.read()
+            dest.write_bytes(image_bytes)
 
-                image_path = f"/uploads/{filename}"
+            image_path = f"/uploads/{filename}"
 
-                # Also upload the same image to Convex Storage.
-                image_storage_id = await upload_image(
-                    image_bytes,
-                    image.content_type or "application/octet-stream",
-                )
-                info = analyze_image(str(dest))
-                phash, exif_dt, exif_gps = info["phash"], info["exif_datetime"], info["exif_gps"]
+            # Upload the same image to Convex Storage.
+            image_storage_id = await upload_image(
+                image_bytes,
+                image.content_type or "application/octet-stream",
+            )
 
-                if phash:
-                    existing = session.exec(select(Report).where(Report.image_phash.is_not(None))).all()
-                    for r in existing:
-                        dist = phash_distance(phash, r.image_phash)
-                        if dist is not None and dist <= 6:
-                            duplicate = True
-                            break
+            # Analyze EXIF metadata and perceptual hash locally.
+            info = analyze_image(str(dest))
+            phash = info["phash"]
+            exif_dt = info["exif_datetime"]
+            exif_gps = info["exif_gps"]
+
+            # Check whether similar image evidence already exists.
+            if phash:
+                existing = session.exec(
+                    select(Report).where(Report.image_phash.is_not(None))
+                ).all()
+
+                for r in existing:
+                    dist = phash_distance(phash, r.image_phash)
+                    if dist is not None and dist <= 6:
+                        duplicate = True
+                        break
+
+        # Save the report to SQLite.
         report = Report(
             incident_id=candidate.id,
             reporter_token=reporter_token,
@@ -164,11 +185,83 @@ async def create_report(
             duplicate_evidence=duplicate,
             semantic_similarity=best,
         )
+
         session.add(report)
         session.commit()
         session.refresh(report)
+
         reasons = recalc_incident(session, candidate)
-        return {"report": report.model_dump(), "incident": candidate.model_dump(), "reasons": reasons}
+        session.refresh(report)
+
+        # Build the Convex incident data.
+        convex_incident = {
+            "sqliteIncidentId": candidate.id,
+            "title": candidate.title,
+            "category": candidate.category,
+            "location": candidate.location,
+            "supportScore": candidate.support_score,
+            "evidenceLevel": candidate.evidence_level,
+            "confirmations": candidate.confirmations,
+            "contradictions": candidate.contradictions,
+        }
+
+        # Omit optional coordinates when they are None.
+        if candidate.latitude is not None:
+            convex_incident["latitude"] = candidate.latitude
+
+        if candidate.longitude is not None:
+            convex_incident["longitude"] = candidate.longitude
+
+        # Create or update the matching incident in Convex.
+        convex_incident_id = await convex_mutation(
+            "incidents:upsertFromBackend",
+            convex_incident,
+        )
+                # Build the Convex report data.
+        convex_report = {
+            "incidentId": convex_incident_id,
+            "reporterToken": reporter_token,
+            "description": description,
+            "category": category,
+            "location": location,
+            "duplicateEvidence": duplicate,
+            "semanticSimilarity": best,
+        }
+
+        # Only send optional values when they exist.
+        if latitude is not None:
+            convex_report["latitude"] = latitude
+
+        if longitude is not None:
+            convex_report["longitude"] = longitude
+
+        if image_storage_id is not None:
+            convex_report["imageStorageId"] = image_storage_id
+
+        if phash is not None:
+            convex_report["imagePhash"] = phash
+
+        if exif_dt is not None:
+            convex_report["exifDatetime"] = exif_dt
+
+        if exif_gps is not None:
+            convex_report["exifGps"] = exif_gps
+
+        # Save the report metadata in Convex.
+        convex_report_id = await convex_mutation(
+            "reports:create",
+            convex_report,
+        )
+
+        return {
+            "report": report.model_dump(),
+            "incident": candidate.model_dump(),
+            "convex_incident_id": convex_incident_id,
+            "convex_report_id": convex_report_id,
+            "image_storage_id": image_storage_id,
+            "reasons": reasons,
+        }
+
 
 @app.post("/incidents/{incident_id}/confirm")
 def confirm(incident_id: int):
