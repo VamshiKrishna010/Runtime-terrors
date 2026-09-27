@@ -16,10 +16,17 @@ log = logging.getLogger(__name__)
 def initialize(engine, uploads):
     tables = inspect(engine).get_table_names()
     needs_column = "incident" in tables and "updated_at" not in {c["name"] for c in inspect(engine).get_columns("incident")}
+    report_columns = {c["name"] for c in inspect(engine).get_columns("report")} if "report" in tables else set()
+    visual_columns = {
+        "visual_match",
+        "visual_match_confidence",
+        "visual_match_reason",
+    }
+    needs_visual_columns = "report" in tables and not visual_columns.issubset(report_columns)
     needs_tables = "evidence" not in tables or "vote" not in tables
     # SQLite's backup API includes committed WAL data; do not copy a live DB file.
     database = engine.url.database
-    if tables and (needs_column or needs_tables) and database and database != ":memory:":
+    if tables and (needs_column or needs_visual_columns or needs_tables) and database and database != ":memory:":
         backup = Path(database).with_suffix(f".migration-{datetime.now(timezone.utc):%Y%m%dT%H%M%S%f}.bak")
         with closing(sqlite3.connect(database)) as source, closing(sqlite3.connect(backup)) as destination:
             source.backup(destination)
@@ -27,6 +34,20 @@ def initialize(engine, uploads):
         if needs_column:
             connection.exec_driver_sql("ALTER TABLE incident ADD COLUMN updated_at DATETIME")
             connection.exec_driver_sql("UPDATE incident SET updated_at = created_at WHERE updated_at IS NULL")
+
+        if needs_visual_columns:
+            if "visual_match" not in report_columns:
+                connection.exec_driver_sql(
+                    "ALTER TABLE report ADD COLUMN visual_match VARCHAR"
+                )
+            if "visual_match_confidence" not in report_columns:
+                connection.exec_driver_sql(
+                    "ALTER TABLE report ADD COLUMN visual_match_confidence FLOAT"
+                )
+            if "visual_match_reason" not in report_columns:
+                connection.exec_driver_sql(
+                    "ALTER TABLE report ADD COLUMN visual_match_reason VARCHAR"
+                )
     SQLModel.metadata.create_all(engine)
     # Backfill only real, existing attachments. Missing files remain report-only.
     with Session(engine) as session:

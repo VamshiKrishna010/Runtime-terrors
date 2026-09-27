@@ -50,6 +50,11 @@ export default defineSchema({
     authenticityConfidence: v.optional(v.number()),
     authenticityReason: v.optional(v.string()),
 
+    // Image-to-report visual comparison
+    visualMatch: v.optional(v.string()),
+    visualMatchConfidence: v.optional(v.number()),
+    visualMatchReason: v.optional(v.string()),
+
     semanticSimilarity: v.number(),
 
     createdAt: v.number(),

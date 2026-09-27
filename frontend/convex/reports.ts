@@ -60,6 +60,9 @@ export const createWithIncident = mutation({
     authenticityClassification: v.optional(v.string()),
     authenticityConfidence: v.optional(v.number()),
     authenticityReason: v.optional(v.string()),
+    visualMatch: v.optional(v.string()),
+    visualMatchConfidence: v.optional(v.number()),
+    visualMatchReason: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const createdAt = Date.now();
@@ -101,6 +104,9 @@ export const createWithIncident = mutation({
       authenticityClassification: args.authenticityClassification,
       authenticityConfidence: args.authenticityConfidence,
       authenticityReason: args.authenticityReason,
+      visualMatch: args.visualMatch,
+      visualMatchConfidence: args.visualMatchConfidence,
+      visualMatchReason: args.visualMatchReason,
       duplicateEvidence,
       semanticSimilarity: 0,
       createdAt,
