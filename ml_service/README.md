@@ -1,16 +1,18 @@
 # VeriPulse ML setup
 
-Owner: Vamshi. Deliverables for the 3:30-4:30 PM setup block: model choice,
-30 labeled synthetic reports, and a runnable FastAPI service skeleton.
+Owner: Vamshi. MiniLM embeddings and interpretable evidence scoring for the
+report-clustering flow.
 
 ## Status
 
 - Selected model: `sentence-transformers/all-MiniLM-L6-v2`.
 - Dataset: `data/reports.json`, 30 reports across 10 expected incidents, with 12 explicit pair checks.
-- Working routes: `GET /health`, `/docs`, `/openapi.json`.
-- Planned routes: `POST /embed` and `POST /score` validate requests, then return HTTP 501.
-- No model download, inference, calibrated threshold, or new scoring implementation yet.
-  `ok: true` on `/health` means the process is alive; capabilities remain false.
+- Working routes: `GET /health`, `POST /embed`, and `POST /score`.
+- MiniLM loads lazily on the first `/embed` request and returns normalized
+  384-dimensional vectors.
+- The 30-report fixture calibrates cosine similarity to `0.32`; category,
+  canonical location, and a two-hour window remain mandatory cluster guards.
+- `/score` returns the weighted score and the reasons displayed in the UI.
 
 This service is separate from the existing FastAPI/SQLite app in `backend/`.
 The build plan calls for Convex actions to call this service over HTTP. Its
@@ -23,19 +25,19 @@ Use the model already selected in the team build plan. Its
 documents 384-dimensional sentence embeddings suitable for clustering, an
 Apache-2.0 license, and default truncation after 256 word pieces.
 
-Implementation target for the core block: load one SentenceTransformer instance
-per process on CPU and call `encode(texts, normalize_embeddings=True)`. Keep
-output order identical to input order. Sentence-transformers and model weights
-will be installed in that block; they are deliberately not runtime dependencies
-of this setup skeleton. The 2,000-character request limit is an API bound, not a
-guarantee that the model will encode every token.
+The service loads one SentenceTransformer instance per process on CPU and calls
+`encode(texts, normalize_embeddings=True)`. Output order matches input order.
+The first embedding request downloads the model weights if needed. The
+2,000-character request limit is an API bound, not a guarantee that the model
+will encode every token.
 
 Cosine similarity compares descriptions. Canonical building and time are separate
 eligibility checks owned by the clustering integration. Do not merge two incidents
 solely because their descriptions are similar. Use a two-hour candidate window;
 the exact incident timestamp anchor should be agreed with Jas before integration.
-`CLUSTER_SIMILARITY_THRESHOLD` remains `None` until evaluated on the seed data.
-Do not reuse the old backend's 0.20 word-overlap threshold for cosine similarity.
+`CLUSTER_SIMILARITY_THRESHOLD` is `0.32`, selected by
+`python -m ml_service.evaluate_seed`. Do not reuse the old backend's 0.20
+word-overlap threshold for cosine similarity.
 
 ## Run from the repository root
 
@@ -59,14 +61,15 @@ ml_service/.venv/Scripts/python.exe -m ml_service.validate_seed
 ml_service/.venv/Scripts/python.exe -m unittest discover -s ml_service/tests -v
 ```
 
-The validator checks fixture consistency; it does not measure ML accuracy. This
-setup requires no keys or model downloads. Tests do not modify the app database.
+The validator checks fixture consistency. Tests mock the model and do not
+download weights or modify the app database. Run
+`python -m ml_service.evaluate_seed` for the local threshold evaluation.
 
 ## Proposed API contracts for Jas
 
-These are proposed handoff contracts, not a claim of team agreement. OpenAPI is
-generated from `schemas.py`; unknown request fields are rejected with HTTP 422.
-Convex makes server-to-server requests, so browser CORS is not required here.
+OpenAPI is generated from `schemas.py`; unknown request fields are rejected with
+HTTP 422. The local frontend calls this service directly, so the default CORS
+origins include Vite on port 5173. Set `ML_CORS_ORIGINS` when hosting it.
 
 ### POST /embed
 
@@ -76,7 +79,7 @@ Request: 1-64 nonblank descriptions, at most 2,000 characters each.
 {"texts": ["Wi-Fi keeps dropping in ITE.", "Eduroam disconnects upstairs."]}
 ```
 
-Future success response fields:
+Success response fields:
 
 | Field | Meaning |
 | --- | --- |
@@ -85,8 +88,7 @@ Future success response fields:
 | `normalized` | `true` |
 | `embeddings` | One L2-normalized array of 384 floats per input, in input order |
 
-Current response is HTTP 501 with `detail.code = "not_implemented"` and
-`detail.capability = "embed"`. No placeholder vectors are returned.
+The vectors are produced by MiniLM; no placeholder vectors are returned.
 
 ### POST /score
 
@@ -107,19 +109,20 @@ Current response is HTTP 501 with `detail.code = "not_implemented"` and
 
 Counts must be nonnegative integers. Agreement and optional consistency values
 must be within [0, 1]. For a single report, use agreement 0; when aggregating
-cosine similarities, clamp negative values to 0. An eventual scoring
-implementation must not treat missing metadata or an unavailable visual check
+cosine similarities, clamp negative values to 0. The scoring implementation
+does not treat missing metadata or an unavailable visual check
 as negative evidence. `metadata_conflicts` counts known mismatches only.
 The caller must deduplicate reporter and vote identities before constructing
 counts; this stateless service cannot verify independence from these aggregates.
 
-Future success response: `support_score` (0-100), `evidence_level`
+Success response: `support_score` (0-100), `evidence_level`
 (`Low`, `Emerging`, or `Strong`), and `reasons` (human-readable contribution
 strings). The score measures support, not probability of truth.
 
-Current response is HTTP 501 with `detail.capability = "score"`. Weights and
-label thresholds are deferred to the integration block. The existing backend
-scorer remains separate and is not exposed as the new scoring contract.
+The response includes transparent weighted contributions for reporter diversity,
+semantic agreement, recency, confirmations, images, location, visual agreement,
+duplicates, metadata conflicts, and contradictions. The existing backend scorer
+remains separate.
 
 ### Photo analysis boundary
 

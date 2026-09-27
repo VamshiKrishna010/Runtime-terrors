@@ -31,6 +31,7 @@ import './styles.css';
 import EvidenceCenter from './EvidenceCenter';
 import Analytics from './Analytics';
 import IncidentEvidence from './IncidentEvidence';
+import { embedDescription, scoreEvidence } from './ml';
 
 import {
   MapContainer,
@@ -964,7 +965,8 @@ function HeaderControls({ refresh, loading, refreshLabel = 'incidents' }) {
 }
 
 function ReporterFlow({ onSubmitted }) {
-  const createReport = useMutation(api.reports.createWithIncident);
+  const createReport = useMutation(api.reports.createClustered);
+  const applyScore = useMutation(api.incidents.applyScore);
   const generateUploadUrl = useMutation(api.reports.generateUploadUrl);
   const [step, setStep] = useState(1);
   const [form, setForm] = useState({ reporterToken: 'demo-user-1', category: 'Network / IT', location: 'ITE Building', description: '' });
@@ -1011,6 +1013,7 @@ function ReporterFlow({ onSubmitted }) {
     try {
       let imageStorageId;
       let analysis = {};
+      const embedding = await embedDescription(form.description.trim());
 
       if (image) {
         const analysisForm = new FormData();
@@ -1051,6 +1054,14 @@ function ReporterFlow({ onSubmitted }) {
         ...(analysis.exifDatetime ? { exifDatetime: analysis.exifDatetime } : {}),
         ...(analysis.exifGps ? { exifGps: analysis.exifGps } : {}),
         ...(analysis.visionAnalysis ? { visionAnalysis: analysis.visionAnalysis } : {}),
+        embedding,
+      });
+      const score = await scoreEvidence(result.scoreInput);
+      await applyScore({
+        id: result.incidentId,
+        supportScore: score.support_score,
+        evidenceLevel: score.evidence_level,
+        reasons: score.reasons,
       });
       onSubmitted(result.incidentId);
       setForm((current) => ({ ...current, description: '' })); chooseImage(null); setStep(1);

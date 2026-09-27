@@ -1,3 +1,4 @@
 fastapi==0.137.2
 pydantic==2.12.5
 uvicorn==0.41.0
+sentence-transformers==5.5.1
