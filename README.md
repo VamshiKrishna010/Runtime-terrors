@@ -52,6 +52,11 @@ Deploy keys** page, with the `deployment:deploy` permission. The
 not deploy production; only a merged pull request whose source is `pre-dev` or
 `dev` can do so.
 
+The same production job publishes the Vite frontend to GitHub Pages at
+`https://vamshikrishna010.github.io/Runtime-terrors/`. In repository
+`Settings → Pages`, choose **GitHub Actions** as the build and deployment
+source before the first production merge.
+
 ## Run with Tilt
 
 Install [Tilt](https://docs.tilt.dev/install.html), Node.js with npm, and Python
