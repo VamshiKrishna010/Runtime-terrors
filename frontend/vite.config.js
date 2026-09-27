@@ -5,4 +5,16 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   envDir: '..',
   envPrefix: ['VITE_', 'CONVEX_'],
+  server: {
+    host: '0.0.0.0',
+    port: 5173,
+    allowedHosts: ['.trycloudflare.com'],
+    proxy: {
+      '/api': {
+        target: 'http://backend:8000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ''),
+      },
+    },
+  },
 });
