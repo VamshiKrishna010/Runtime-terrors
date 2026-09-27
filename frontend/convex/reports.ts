@@ -58,6 +58,9 @@ export const createWithIncident = mutation({
     exifDatetime: v.optional(v.string()),
     exifGps: v.optional(v.string()),
     visionAnalysis: v.optional(v.string()),
+    authenticityClassification: v.optional(v.string()),
+    authenticityConfidence: v.optional(v.number()),
+    authenticityReason: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const createdAt = Date.now();
@@ -96,6 +99,9 @@ export const createWithIncident = mutation({
       exifDatetime: args.exifDatetime,
       exifGps: args.exifGps,
       visionAnalysis: args.visionAnalysis,
+      authenticityClassification: args.authenticityClassification,
+      authenticityConfidence: args.authenticityConfidence,
+      authenticityReason: args.authenticityReason,
       duplicateEvidence,
       semanticSimilarity: 0,
       createdAt,

@@ -1,4 +1,4 @@
-import { defineSchema, defineTable } from "convex/server";
+﻿import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 export default defineSchema({
@@ -47,7 +47,7 @@ export default defineSchema({
     // Groq Vision result
     visionAnalysis: v.optional(v.string()),
 
-    // Image authenticity check
+    // Qwen visual authenticity assessment
     authenticityClassification: v.optional(v.string()),
     authenticityConfidence: v.optional(v.number()),
     authenticityReason: v.optional(v.string()),
