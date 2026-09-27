@@ -12,6 +12,8 @@ on:
 
 permissions:
   contents: read
+  pages: write
+  id-token: write
 
 concurrency:
   group: convex-${{ github.workflow }}-${{ github.ref }}
@@ -109,8 +111,16 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
         working-directory: frontend
-      - name: Deploy functions to Convex production
-        run: npx convex deploy
+      - name: Deploy Convex production and build the frontend
+        run: npx convex deploy --cmd "npm run build"
         working-directory: frontend
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+          VITE_DEPLOY_TARGET: github-pages
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: frontend/dist
+      - name: Publish frontend to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
