@@ -49,3 +49,59 @@ export const create = mutation({
     return incidentId;
   },
 });
+
+export const upsertFromBackend = mutation({
+  args: {
+    sqliteIncidentId: v.number(),
+    title: v.string(),
+    category: v.string(),
+    location: v.string(),
+
+    latitude: v.optional(v.number()),
+    longitude: v.optional(v.number()),
+
+    supportScore: v.number(),
+    evidenceLevel: v.string(),
+    confirmations: v.number(),
+    contradictions: v.number(),
+  },
+
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("incidents")
+      .withIndex("by_sqlite_id", (q) =>
+        q.eq("sqliteIncidentId", args.sqliteIncidentId)
+      )
+      .unique();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        title: args.title,
+        category: args.category,
+        location: args.location,
+        latitude: args.latitude,
+        longitude: args.longitude,
+        supportScore: args.supportScore,
+        evidenceLevel: args.evidenceLevel,
+        confirmations: args.confirmations,
+        contradictions: args.contradictions,
+      });
+
+      return existing._id;
+    }
+
+    return await ctx.db.insert("incidents", {
+      sqliteIncidentId: args.sqliteIncidentId,
+      title: args.title,
+      category: args.category,
+      location: args.location,
+      latitude: args.latitude,
+      longitude: args.longitude,
+      supportScore: args.supportScore,
+      evidenceLevel: args.evidenceLevel,
+      confirmations: args.confirmations,
+      contradictions: args.contradictions,
+      createdAt: Date.now(),
+    });
+  },
+});

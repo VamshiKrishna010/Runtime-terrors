@@ -3,6 +3,7 @@ import { v } from "convex/values";
 
 export default defineSchema({
   incidents: defineTable({
+    sqliteIncidentId: v.optional(v.number()),
     title: v.string(),
     category: v.string(),
     location: v.string(),
@@ -17,7 +18,9 @@ export default defineSchema({
     contradictions: v.number(),
 
     createdAt: v.number(),
-  }).index("by_created_at", ["createdAt"]),
+})
+  .index("by_created_at", ["createdAt"])
+  .index("by_sqlite_id", ["sqliteIncidentId"]),
 
   reports: defineTable({
     incidentId: v.id("incidents"),
