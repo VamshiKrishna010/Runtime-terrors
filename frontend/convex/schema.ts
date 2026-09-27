@@ -45,6 +45,11 @@ export default defineSchema({
     // Groq Vision result
     visionAnalysis: v.optional(v.string()),
 
+    // Qwen visual authenticity assessment
+    authenticityClassification: v.optional(v.string()),
+    authenticityConfidence: v.optional(v.number()),
+    authenticityReason: v.optional(v.string()),
+
     semanticSimilarity: v.number(),
 
     createdAt: v.number(),

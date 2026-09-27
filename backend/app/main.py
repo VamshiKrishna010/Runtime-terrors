@@ -19,6 +19,7 @@ from .analytics import aggregate_analytics
 from .evidence import MAX_UPLOAD_BYTES, inspect_bytes, iso, utc
 from .ml import best_similarity
 from .groq_vision import analyze_image_with_groq
+from .qwen_authenticity import analyze_image_authenticity
 from .models import Evidence, Incident, Report, Vote
 from .services import all_evidence, duplicate_analysis, incident_payload, make_evidence, now, summary, upload_path
 
@@ -106,6 +107,7 @@ def create_app(database_url=None, uploads_dir=None, allow_cleanup=None):
 
             try:
                 vision_analysis = analyze_image_with_groq(str(temp_path))
+                authenticity = analyze_image_authenticity(str(temp_path))
             finally:
                 temp_path.unlink(missing_ok=True)
 
@@ -120,6 +122,7 @@ def create_app(database_url=None, uploads_dir=None, allow_cleanup=None):
                 "exifDatetime": metadata.get("capture_timestamp"),
                 "exifGps": gps,
                 "visionAnalysis": vision_analysis,
+                "authenticity": authenticity,
             }
 
         except ValueError as error:

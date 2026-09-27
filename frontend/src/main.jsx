@@ -1051,6 +1051,9 @@ function ReporterFlow({ onSubmitted }) {
         ...(analysis.exifDatetime ? { exifDatetime: analysis.exifDatetime } : {}),
         ...(analysis.exifGps ? { exifGps: analysis.exifGps } : {}),
         ...(analysis.visionAnalysis ? { visionAnalysis: analysis.visionAnalysis } : {}),
+        ...(analysis.authenticity?.classification ? { authenticityClassification: analysis.authenticity.classification } : {}),
+        ...(typeof analysis.authenticity?.confidence === 'number' ? { authenticityConfidence: analysis.authenticity.confidence } : {}),
+        ...(analysis.authenticity?.reason ? { authenticityReason: analysis.authenticity.reason } : {}),
       });
       onSubmitted(result.incidentId);
       setForm((current) => ({ ...current, description: '' })); chooseImage(null); setStep(1);
