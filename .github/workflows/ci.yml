@@ -6,7 +6,7 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review, closed]
   push:
-    branches: [pre-dev, dev, main]
+    branches: [pre-dev, dev]
 
 permissions:
   contents: read
@@ -82,7 +82,7 @@ jobs:
     needs: [frontend-ci, backend-ci, ml-ci]
     if: >-
       github.event_name == 'push' &&
-      (github.ref == 'refs/heads/pre-dev' || github.ref == 'refs/heads/dev')
+      github.ref == 'refs/heads/pre-dev'
     runs-on: ubuntu-latest
     environment: convex-deployment
     steps:
@@ -107,8 +107,7 @@ jobs:
       github.event_name == 'pull_request' &&
       github.event.action == 'closed' &&
       github.event.pull_request.merged == true &&
-      github.event.pull_request.base.ref == 'main' &&
-      (github.event.pull_request.head.ref == 'pre-dev' || github.event.pull_request.head.ref == 'dev')
+      github.event.pull_request.base.ref == 'dev'
     runs-on: ubuntu-latest
     environment: convex-production
     steps:
