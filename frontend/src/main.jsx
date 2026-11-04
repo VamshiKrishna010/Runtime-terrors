@@ -7,7 +7,6 @@ import {
   ShieldCheck,
   AlertTriangle,
   Wifi,
-  Camera,
   MapPin,
   CheckCircle2,
   XCircle,
@@ -16,11 +15,9 @@ import {
   Radio,
   Image,
   BarChart3,
-  Bell,
   Users,
   Activity,
   ChevronRight,
-  Upload,
   Search,
   RefreshCw,
   Clock3,
@@ -28,11 +25,18 @@ import {
 } from 'lucide-react';
 
 import './styles.css';
+import './styles/header.css';
+import './styles/report-flow.css';
+import './styles/evidence-center.css';
+import './styles/analytics.css';
+import './styles/auth.css';
 import EvidenceCenter from './EvidenceCenter';
 import Analytics from './Analytics';
 import AuthGate, { useAuth } from './AuthGate';
 import IncidentEvidence from './IncidentEvidence';
-import { embedDescription, scoreEvidence } from './ml';
+import HeaderControls from './HeaderControls';
+import ReporterFlow, { errorMessage } from './ReporterFlow';
+import { getDeviceToken } from './deviceToken';
 
 import {
   MapContainer,
@@ -346,6 +350,7 @@ function LiveIncidents({
   selected,
   setSelected,
   vote,
+  myVotes = {},
 }) {
   const [search, setSearch] = useState('');
   const [levelFilter, setLevelFilter] = useState('All');
@@ -760,7 +765,7 @@ function LiveIncidents({
 
                   <TimelineItem
                     title="Report linking"
-                    text="Reports linked using location, category, time and description overlap."
+                    text="Reports linked by location, category, a two-hour window and MiniLM semantic similarity of the descriptions."
                   />
 
                   {(current.confirmations ||
@@ -776,6 +781,7 @@ function LiveIncidents({
               <div className="detailActions">
                 <button
                   className="confirmButton"
+                  aria-pressed={myVotes[current.id] === 'confirm'}
                   onClick={() =>
                     vote(
                       current.id,
@@ -791,6 +797,7 @@ function LiveIncidents({
 
                 <button
                   className="contradictButton"
+                  aria-pressed={myVotes[current.id] === 'contradict'}
                   onClick={() =>
                     vote(
                       current.id,
@@ -857,246 +864,11 @@ function Stat({
   );
 }
 
-const MOCK_NOTIFICATIONS = [
-  { id: 1, message: 'New incident reported near ITE', unread: true },
-  { id: 2, message: 'Incident evidence level changed to Emerging', unread: true },
-  { id: 3, message: '3 new community confirmations', unread: true },
-];
-
-function HeaderControls({ refresh, loading, refreshLabel = 'incidents' }) {
-  const { user, signOut } = useAuth();
-  const [open, setOpen] = useState(null);
-  const [notice, setNotice] = useState('');
-  const controlsRef = useRef(null);
-  const bellRef = useRef(null);
-  const profileRef = useRef(null);
-  const panelRef = useRef(null);
-  const refreshPending = useRef(false);
-  const notifications = MOCK_NOTIFICATIONS;
-  const unread = notifications.some((notification) => notification.unread);
-  const role = import.meta.env.VITE_UI_ROLE;
-  const branch = import.meta.env.VITE_GIT_BRANCH;
-
-  useEffect(() => {
-    if (!open) return;
-    panelRef.current?.focus();
-    const closeOutside = (event) => {
-      if (!controlsRef.current?.contains(event.target)) setOpen(null);
-    };
-    const closeOnEscape = (event) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        setOpen(null);
-        (open === 'notifications' ? bellRef : profileRef).current?.focus();
-      }
-    };
-    document.addEventListener('pointerdown', closeOutside);
-    document.addEventListener('focusin', closeOutside);
-    document.addEventListener('keydown', closeOnEscape);
-    return () => {
-      document.removeEventListener('pointerdown', closeOutside);
-      document.removeEventListener('focusin', closeOutside);
-      document.removeEventListener('keydown', closeOnEscape);
-    };
-  }, [open]);
-
-  const handleRefresh = async () => {
-    if (loading || refreshPending.current) return;
-    refreshPending.current = true;
-    try {
-      await refresh();
-    } finally {
-      refreshPending.current = false;
-    }
-  };
-
-  return (
-    <div className="headerActions" ref={controlsRef}>
-      <button type="button" className="iconButton" onClick={handleRefresh}
-        disabled={loading} aria-busy={loading}
-        aria-label={loading ? `Refreshing ${refreshLabel}` : `Refresh ${refreshLabel}`}>
-        <RefreshCw size={18} className={loading ? 'spin' : undefined} aria-hidden="true" />
-      </button>
-      <div className="headerPopoverAnchor">
-        <button type="button" className="iconButton notificationButton" ref={bellRef}
-          aria-label={unread ? 'Notifications, unread notifications' : 'Notifications'}
-          aria-expanded={open === 'notifications'} aria-controls="header-notifications"
-          onClick={() => setOpen(open === 'notifications' ? null : 'notifications')}>
-          <Bell size={18} aria-hidden="true" />
-          {unread && <span className="notificationDot" aria-hidden="true" />}
-        </button>
-        {open === 'notifications' && (
-          <section id="header-notifications" className="headerPopover" ref={panelRef}
-            tabIndex={-1} aria-labelledby="notifications-title">
-            <b id="notifications-title">Notifications</b>
-            {notifications.length ? (
-              <ul className="notificationList">
-                {notifications.map((notification) => <li key={notification.id}>{notification.message}</li>)}
-              </ul>
-            ) : <p className="headerPopoverNote">No new notifications</p>}
-          </section>
-        )}
-      </div>
-      <div className="headerPopoverAnchor">
-        <button type="button" className="profile" ref={profileRef}
-          aria-label="Runtime Terrors profile" aria-expanded={open === 'profile'}
-          aria-controls="header-profile" onClick={() => {
-            setNotice('');
-            setOpen(open === 'profile' ? null : 'profile');
-          }}>
-          <span className="avatar">{user.initials}</span>
-          <span><b>{user.name}</b><small>{user.event} / Demo</small></span>
-        </button>
-        {open === 'profile' && (
-          <section id="header-profile" className="headerPopover" ref={panelRef}
-            tabIndex={-1} aria-label="Team profile">
-            <p>Account: {user.email}</p><p>Demo session</p>
-            <p>Team: <b>{user.team}</b></p>
-            <p>Event: <b>HackUMBC</b></p>
-            {role && <p>UI role: {role}</p>}
-            {branch && <p>Branch: {branch}</p>}
-            <button type="button" className="headerPopoverAction"
-              onClick={() => setNotice('Settings are coming soon.')}>Settings</button>
-            <button type="button" className="headerPopoverAction"
-              onClick={signOut}>Sign out</button>
-            <p className="headerPopoverNote" role="status">{notice}</p>
-          </section>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ReporterFlow({ onSubmitted }) {
-  const createReport = useMutation(api.reports.createClustered);
-  const applyScore = useMutation(api.incidents.applyScore);
-  const generateUploadUrl = useMutation(api.reports.generateUploadUrl);
-  const [step, setStep] = useState(1);
-  const [form, setForm] = useState({ reporterToken: 'demo-user-1', category: 'Network / IT', location: 'ITE Building', description: '' });
-  const [image, setImage] = useState(null);
-  const [previewUrl, setPreviewUrl] = useState(null);
-  const [stream, setStream] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const videoRef = useRef(null);
-
-  useEffect(() => () => stream?.getTracks().forEach((track) => track.stop()), [stream]);
-  useEffect(() => { if (stream && videoRef.current) videoRef.current.srcObject = stream; }, [stream]);
-  useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
-
-  const chooseImage = (file) => {
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setImage(file || null);
-    setPreviewUrl(file ? URL.createObjectURL(file) : null);
-  };
-  const update = (key, value) => setForm((current) => ({ ...current, [key]: value }));
-  const validateStep = () => {
-    if (step === 1 && (!form.reporterToken.trim() || !form.location.trim())) return 'Add a reporter token and location to continue.';
-    if (step === 2 && form.description.trim().length < 10) return 'Describe what happened in at least 10 characters.';
-    return '';
-  };
-  const next = () => { const message = validateStep(); if (message) setError(message); else { setError(''); setStep((value) => Math.min(3, value + 1)); } };
-  const startCamera = async () => {
-    setError('');
-    try { setStream(await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false })); }
-    catch { setError('Camera access was unavailable. You can still attach a photo from your device.'); }
-  };
-  const stopCamera = () => { stream?.getTracks().forEach((track) => track.stop()); setStream(null); };
-  const capture = () => {
-    const video = videoRef.current;
-    if (!video?.videoWidth) return setError('The camera is still starting. Try again in a moment.');
-    const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-    canvas.getContext('2d').drawImage(video, 0, 0);
-    canvas.toBlob((blob) => { if (blob) chooseImage(new File([blob], `veripulse-${Date.now()}.jpg`, { type: 'image/jpeg' })); }, 'image/jpeg', 0.9);
-    stopCamera();
-  };
-  const submit = async () => {
-    setError(''); setBusy(true);
-    try {
-      let imageStorageId;
-      let analysis = {};
-      const embedding = await embedDescription(form.description.trim());
-
-      if (image) {
-        const analysisForm = new FormData();
-        analysisForm.append('image', image);
-        analysisForm.append('description', form.description.trim());
-
-        const analysisResponse = await fetch('/api/evidence/analyze', {
-          method: 'POST',
-          body: analysisForm,
-        });
-
-        if (!analysisResponse.ok) {
-          const body = await analysisResponse.json().catch(() => null);
-          throw new Error(body?.detail || 'Evidence analysis failed. Please try again.');
-        }
-
-        analysis = await analysisResponse.json();
-
-        const uploadUrl = await generateUploadUrl({});
-        const upload = await fetch(uploadUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': image.type },
-          body: image,
-        });
-
-        if (!upload.ok) throw new Error('Evidence upload failed. Please try again.');
-        imageStorageId = (await upload.json()).storageId;
-      }
-
-      const title = `${form.category}: ${form.description.trim().slice(0, 72)}`;
-      const result = await createReport({
-        title,
-        reporterToken: form.reporterToken.trim(),
-        category: form.category,
-        location: form.location.trim(),
-        description: form.description.trim(),
-        imageStorageId,
-        ...(analysis.imagePhash ? { imagePhash: analysis.imagePhash } : {}),
-        ...(analysis.exifDatetime ? { exifDatetime: analysis.exifDatetime } : {}),
-        ...(analysis.exifGps ? { exifGps: analysis.exifGps } : {}),
-        ...(analysis.visionAnalysis ? { visionAnalysis: analysis.visionAnalysis } : {}),
-        ...(analysis.authenticity?.classification ? { authenticityClassification: analysis.authenticity.classification } : {}),
-        ...(typeof analysis.authenticity?.confidence === 'number' ? { authenticityConfidence: analysis.authenticity.confidence } : {}),
-        ...(analysis.authenticity?.reason ? { authenticityReason: analysis.authenticity.reason } : {}),
-        ...(analysis.authenticity?.classification ? { authenticityClassification: analysis.authenticity.classification } : {}),
-        ...(typeof analysis.authenticity?.confidence === 'number' ? { authenticityConfidence: analysis.authenticity.confidence } : {}),
-        ...(analysis.authenticity?.reason ? { authenticityReason: analysis.authenticity.reason } : {}),
-        ...(analysis.visualComparison?.match ? { visualMatch: analysis.visualComparison.match } : {}),
-        ...(typeof analysis.visualComparison?.confidence === 'number' ? { visualMatchConfidence: analysis.visualComparison.confidence } : {}),
-        ...(analysis.visualComparison?.reason ? { visualMatchReason: analysis.visualComparison.reason } : {}),
-        embedding,
-      });
-      const score = await scoreEvidence(result.scoreInput);
-      await applyScore({
-        id: result.incidentId,
-        supportScore: score.support_score,
-        evidenceLevel: score.evidence_level,
-        reasons: score.reasons,
-      });
-      onSubmitted(result.incidentId);
-      setForm((current) => ({ ...current, description: '' })); chooseImage(null); setStep(1);
-    } catch (submitError) { setError(submitError.message || 'Unable to submit your report. Please try again.'); }
-    finally { setBusy(false); }
-  };
-
-  return <section className="panel formPanel reporterFlow">
-    <div className="panelHeader"><div><p className="panelEyebrow">Community report</p><h2>Report an incident</h2></div><span className="liveBadge"><span />Live Convex sync</span></div>
-    <ol className="reportSteps" aria-label="Report progress">{['Details', 'What happened', 'Evidence & review'].map((label, index) => <li key={label} className={step === index + 1 ? 'active' : step > index + 1 ? 'complete' : ''}><span>{index + 1}</span>{label}</li>)}</ol>
-    {error && <div className="reportError" role="alert"><AlertTriangle size={16} />{error}</div>}
-    {step === 1 && <div className="reportStep"><div className="fieldRow"><label>Reporter token<input value={form.reporterToken} onChange={(event) => update('reporterToken', event.target.value)} placeholder="Your private handle" /></label><label>Category<select value={form.category} onChange={(event) => update('category', event.target.value)}><option>Network / IT</option><option>Facilities</option><option>Environmental</option><option>Safety</option><option>Other</option></select></label></div><label>Location<div className="inputWithIcon"><MapPin size={16} /><input value={form.location} onChange={(event) => update('location', event.target.value)} placeholder="Where is this happening?" /></div></label></div>}
-    {step === 2 && <div className="reportStep"><label>What happened?<textarea autoFocus value={form.description} onChange={(event) => update('description', event.target.value)} placeholder="Describe what you saw, when it started, and anything that could help someone verify it." /><small className="fieldHint">Avoid names, phone numbers, or other private details.</small></label></div>}
-    {step === 3 && <div className="reportStep"><div className="cameraActions"><button type="button" className="secondary" onClick={startCamera} disabled={Boolean(stream)}><Camera size={16} />Open camera</button><label className="secondary uploadTrigger"><Upload size={16} />Choose photo<input type="file" accept="image/*" capture="environment" onChange={(event) => chooseImage(event.target.files?.[0])} /></label></div>{stream && <div className="cameraPreview"><video ref={videoRef} autoPlay playsInline muted /><div><button type="button" className="primary" onClick={capture}><Camera size={16} />Capture photo</button><button type="button" className="secondary" onClick={stopCamera}>Cancel</button></div></div>}{previewUrl && <figure className="selectedEvidence"><img src={previewUrl} alt="Evidence selected for upload" /><figcaption><Camera size={14} />{image?.name}<button type="button" onClick={() => chooseImage(null)}>Remove</button></figcaption></figure>}<div className="reportReview"><b>{form.category}</b><span>{form.location}</span><p>{form.description}</p></div></div>}
-    <div className="reportNav"><button type="button" className="secondary" onClick={() => { setError(''); setStep((value) => Math.max(1, value - 1)); }} disabled={step === 1 || busy}>Back</button>{step < 3 ? <button type="button" className="primary" onClick={next}>Continue <ChevronRight size={16} /></button> : <button type="button" className="primary" disabled={busy} onClick={submit}>{busy ? <><RefreshCw className="spin" size={16} />Submitting…</> : <><BrainCircuit size={16} />Submit report</>}</button>}</div>
-  </section>;
-}
-
 function App() {
   const analyticsRef = useRef(null);
   const rawIncidents = useQuery(api.incidents.list);
   const submitVote = useMutation(api.incidents.vote);
+  const myVotes = useQuery(api.incidents.myVotes, { voterToken: getDeviceToken() }) || {};
   const incidents = useMemo(() => (rawIncidents || []).map((incident) => ({
     ...incident,
     id: incident._id,
@@ -1114,8 +886,6 @@ function App() {
   const [apiError, setApiError] =
     useState('');
 
-  const [pickingLocation, setPickingLocation] =
-    useState(false);
 
   const votePending = useRef(false);
 
@@ -1169,13 +939,13 @@ function App() {
     votePending.current = true;
     setApiError('');
     try {
-      await submitVote({ id, type });
+      await submitVote({ id, type, voterToken: getDeviceToken() });
     } catch (error) {
       console.error(
         'Failed to submit vote',
         error
       );
-      setApiError('Unable to save your vote. Please try again.');
+      setApiError(errorMessage(error, 'Unable to save your vote. Please try again.'));
     } finally {
       votePending.current = false;
     }
@@ -1560,216 +1330,6 @@ function App() {
                   )}
               </div>
 
-              {false && <div className="panel formPanel">
-                <div className="panelHeader">
-                  <div>
-                    <p className="panelEyebrow">
-                      Community report
-                    </p>
-
-                    <h2>
-                      Report an Incident
-                    </h2>
-                  </div>
-
-                  <span className="liveBadge">
-                    <span />
-                    Live analysis
-                  </span>
-                </div>
-
-                <form
-                  onSubmit={submit}
-                >
-                  <div className="fieldRow">
-                    <label>
-                      Reporter token
-
-                      <input
-                        value={
-                          form.reporter_token
-                        }
-                        onChange={(
-                          event
-                        ) =>
-                          setForm({
-                            ...form,
-                            reporter_token:
-                              event.target
-                                .value,
-                          })
-                        }
-                      />
-                    </label>
-
-                    <label>
-                      Category
-
-                      <select
-                        value={
-                          form.category
-                        }
-                        onChange={(
-                          event
-                        ) =>
-                          setForm({
-                            ...form,
-                            category:
-                              event.target
-                                .value,
-                          })
-                        }
-                      >
-                        <option>
-                          Network / IT
-                        </option>
-
-                        <option>
-                          Facilities
-                        </option>
-
-                        <option>
-                          Environmental
-                        </option>
-
-                        <option>
-                          Safety
-                        </option>
-                        <option>Other</option>
-                      </select>
-                    </label>
-                  </div>
-
-                  <label>
-                    Location
-
-                    <div className="inputWithIcon">
-                      <MapPin
-                        size={16}
-                      />
-
-                      <input
-                        value={
-                          form.location
-                        }
-                        onChange={(
-                          event
-                        ) =>
-                          setForm({
-                            ...form,
-                            location:
-                              event.target
-                                .value,
-                          })
-                        }
-                      />
-                    </div>
-                  </label>
-
-                  <div className="reportCoordinates">
-                    <button type="button" className="secondary" aria-pressed={pickingLocation} onClick={() => setPickingLocation((value) => !value)}>
-                      {pickingLocation ? 'Cancel map pin' : 'Pin report location on campus map'}
-                    </button>
-                    {pickingLocation && <p role="status">Click the campus map above to select this report's coordinates.</p>}
-                    <div className="fieldRow">
-                      <label>Latitude (optional)<input type="number" step="any" min="-90" max="90" value={form.latitude ?? ''} onChange={(event) => setForm({ ...form, latitude: event.target.value === '' ? null : Number(event.target.value) })} /></label>
-                      <label>Longitude (optional)<input type="number" step="any" min="-180" max="180" value={form.longitude ?? ''} onChange={(event) => setForm({ ...form, longitude: event.target.value === '' ? null : Number(event.target.value) })} /></label>
-                    </div>
-                    {form.latitude != null && <button type="button" className="secondary" onClick={() => setForm({ ...form, latitude: null, longitude: null })}>Clear coordinates</button>}
-                  </div>
-
-                  <label>
-                    Description
-
-                    <textarea
-                      required
-                      value={
-                        form.description
-                      }
-                      onChange={(
-                        event
-                      ) =>
-                        setForm({
-                          ...form,
-                          description:
-                            event.target
-                              .value,
-                        })
-                      }
-                      placeholder="Example: eduroam keeps dropping on ITE level 2"
-                    />
-
-                    <small className="fieldHint">
-                      Describe what you are
-                      seeing as clearly as
-                      possible.
-                    </small>
-                  </label>
-
-                  <label className="uploadBox">
-                    <Upload size={22} />
-
-                    <div>
-                      <b>
-                        Attach evidence
-                      </b>
-
-                      <span>
-                        Upload an image or video (up to 10 MB) to
-                        support your report.
-                      </span>
-                    </div>
-
-                    <input
-                      key={fileKey}
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm"
-                      onChange={(
-                        event
-                      ) =>
-                        setImage(
-                          event.target
-                            .files?.[0] ||
-                            null
-                        )
-                      }
-                    />
-
-                    {image && (
-                      <div className="fileSelected">
-                        <Camera
-                          size={14}
-                        />
-                        {image.name}
-                      </div>
-                    )}
-                  </label>
-
-                  <button
-                    className="primary"
-                    disabled={busy}
-                  >
-                    {busy ? (
-                      <>
-                        <RefreshCw
-                          className="spin"
-                          size={17}
-                        />
-                        Analyzing
-                        evidence...
-                      </>
-                    ) : (
-                      <>
-                        <BrainCircuit
-                          size={17}
-                        />
-                        Submit & Analyze
-                      </>
-                    )}
-                  </button>
-                  {reportNotice && <p role="status" className="fieldHint">{reportNotice}</p>}
-                </form>
-              </div>}
               <ReporterFlow onSubmitted={(incidentId) => {
                 setActiveView('dashboard');
                 setSelected({ id: incidentId });
@@ -1926,6 +1486,7 @@ function App() {
                 <div className="actions">
                   <button
                     className="confirmButton"
+                    aria-pressed={myVotes[selected.id] === 'confirm'}
                     onClick={() =>
                       vote(
                         selected.id,
@@ -1941,6 +1502,7 @@ function App() {
 
                   <button
                     className="contradictButton"
+                    aria-pressed={myVotes[selected.id] === 'contradict'}
                     onClick={() =>
                       vote(
                         selected.id,
@@ -1968,6 +1530,7 @@ function App() {
               setSelected
             }
             vote={vote}
+            myVotes={myVotes}
           />
         )}
 

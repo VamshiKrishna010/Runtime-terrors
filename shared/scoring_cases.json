@@ -1,0 +1,179 @@
+{
+  "cases": [
+    {
+      "name": "single report, no image",
+      "input": {
+        "distinct_reporters": 1,
+        "semantic_agreement": 0
+      },
+      "expected": {
+        "support_score": 12,
+        "evidence_level": "Low",
+        "reasons": [
+          "1 distinct reporter token (+12)",
+          "Semantic agreement 0% (+0)"
+        ]
+      }
+    },
+    {
+      "name": "two reporters, close in time",
+      "input": {
+        "distinct_reporters": 2,
+        "semantic_agreement": 0.8,
+        "confirmations": 1,
+        "time_proximity": 0.5
+      },
+      "expected": {
+        "support_score": 58,
+        "evidence_level": "Emerging",
+        "reasons": [
+          "2 distinct reporter tokens (+24)",
+          "Semantic agreement 80% (+24)",
+          "Corroborating reports within 30 minutes (+5)",
+          "1 community confirmation (+5)"
+        ]
+      }
+    },
+    {
+      "name": "half-way rounding is half-up in both languages",
+      "input": {
+        "distinct_reporters": 2,
+        "semantic_agreement": 0.75,
+        "time_proximity": 0.25
+      },
+      "expected": {
+        "support_score": 50,
+        "evidence_level": "Emerging",
+        "reasons": [
+          "2 distinct reporter tokens (+24)",
+          "Semantic agreement 75% (+23)",
+          "Corroborating reports within 30 minutes (+3)"
+        ]
+      }
+    },
+    {
+      "name": "strong corroborated incident",
+      "input": {
+        "distinct_reporters": 4,
+        "semantic_agreement": 0.71,
+        "confirmations": 3,
+        "unique_images": 2,
+        "time_proximity": 1,
+        "visual_match": "yes"
+      },
+      "expected": {
+        "support_score": 98,
+        "evidence_level": "Strong",
+        "reasons": [
+          "4 distinct reporter tokens (+36)",
+          "Semantic agreement 71% (+21)",
+          "Corroborating reports within 30 minutes (+10)",
+          "3 community confirmations (+15)",
+          "2 unique images (+8)",
+          "Visual match yes (+8)"
+        ]
+      }
+    },
+    {
+      "name": "caps apply",
+      "input": {
+        "distinct_reporters": 9,
+        "semantic_agreement": 1,
+        "confirmations": 10,
+        "unique_images": 7,
+        "time_proximity": 1,
+        "visual_match": "yes"
+      },
+      "expected": {
+        "support_score": 100,
+        "evidence_level": "Strong",
+        "reasons": [
+          "9 distinct reporter tokens (+36)",
+          "Semantic agreement 100% (+30)",
+          "Corroborating reports within 30 minutes (+10)",
+          "10 community confirmations (+20)",
+          "7 unique images (+12)",
+          "Visual match yes (+8)"
+        ]
+      }
+    },
+    {
+      "name": "reused images and metadata conflicts",
+      "input": {
+        "distinct_reporters": 3,
+        "semantic_agreement": 0.6,
+        "unique_images": 1,
+        "duplicate_images": 2,
+        "metadata_conflicts": 1,
+        "time_proximity": 1,
+        "visual_match": "partial"
+      },
+      "expected": {
+        "support_score": 40,
+        "evidence_level": "Emerging",
+        "reasons": [
+          "3 distinct reporter tokens (+36)",
+          "Semantic agreement 60% (+18)",
+          "Corroborating reports within 30 minutes (+10)",
+          "1 unique image (+4)",
+          "Visual match partial (+4)",
+          "2 reused images (-24)",
+          "1 metadata conflict (-8)"
+        ]
+      }
+    },
+    {
+      "name": "contradicted and visually inconsistent, clamps at 0",
+      "input": {
+        "distinct_reporters": 1,
+        "semantic_agreement": 0,
+        "contradictions": 5,
+        "visual_match": "no"
+      },
+      "expected": {
+        "support_score": 0,
+        "evidence_level": "Low",
+        "reasons": [
+          "1 distinct reporter token (+12)",
+          "Semantic agreement 0% (+0)",
+          "Visual match no (-4)",
+          "5 community contradictions (-28)"
+        ]
+      }
+    },
+    {
+      "name": "emerging threshold is inclusive",
+      "input": {
+        "distinct_reporters": 2,
+        "semantic_agreement": 0.37
+      },
+      "expected": {
+        "support_score": 35,
+        "evidence_level": "Emerging",
+        "reasons": [
+          "2 distinct reporter tokens (+24)",
+          "Semantic agreement 37% (+11)"
+        ]
+      }
+    },
+    {
+      "name": "strong threshold is inclusive",
+      "input": {
+        "distinct_reporters": 3,
+        "semantic_agreement": 0.47,
+        "confirmations": 1,
+        "time_proximity": 1
+      },
+      "expected": {
+        "support_score": 65,
+        "evidence_level": "Strong",
+        "reasons": [
+          "3 distinct reporter tokens (+36)",
+          "Semantic agreement 47% (+14)",
+          "Corroborating reports within 30 minutes (+10)",
+          "1 community confirmation (+5)"
+        ]
+      }
+    }
+  ]
+}

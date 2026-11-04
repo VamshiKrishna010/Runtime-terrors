@@ -1,0 +1,118 @@
+/* Header controls */
+.headerPopoverAnchor {
+  position: relative;
+}
+
+button.profile {
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  padding: 0 0 0 6px;
+  text-align: left;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+button.profile:hover,
+.headerActions button[aria-expanded="true"],
+.headerPopoverAction:hover {
+  background: var(--primary-soft);
+}
+
+.headerActions button:focus-visible,
+.headerPopover:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+}
+
+.headerActions .iconButton:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.headerPopover {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 1100;
+  width: 290px;
+  max-width: calc(100vw - 32px);
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.headerPopover p {
+  margin: 0 0 10px;
+}
+
+.notificationList {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+}
+
+.notificationList li {
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+}
+
+.headerPopoverAction {
+  display: block;
+  width: 100%;
+  padding: 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.headerPopover .headerPopoverNote {
+  margin: 10px 0 0;
+  color: var(--muted);
+}
+
+.headerPopoverNote:empty {
+  display: none;
+}
+
+@media (max-width: 480px) {
+  .headerActions .iconButton:first-child {
+    display: grid;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .headerActions .spin {
+    animation: none;
+  }
+}
+
+/* Uploaded evidence in Live Incidents */
+.incidentVisualEvidence { margin: 20px 0; }
+.incidentVisualEvidence h3 { font-size: 14px; margin: 0 0 12px; }
+.incidentEvidenceMain { display: block; width: 100%; padding: 0; overflow: hidden; border: 1px solid var(--border); border-radius: 12px; background: var(--panel); cursor: zoom-in; }
+.incidentEvidenceMain img { display: block; width: 100%; max-height: 300px; object-fit: cover; }
+.incidentEvidenceCaption { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; font-size: 12px; }
+.incidentEvidenceCaption span { color: var(--muted); font-size: 11px; }
+.incidentEvidenceThumbnails { display: flex; gap: 8px; overflow-x: auto; padding: 4px; margin-top: 10px; }
+.incidentEvidenceThumbnails button { flex-shrink: 0; width: 70px; height: 56px; padding: 0; overflow: hidden; border: 2px solid var(--border); border-radius: 8px; background: var(--panel); cursor: pointer; }
+.incidentEvidenceThumbnails img { width: 100%; height: 100%; object-fit: cover; }
+.incidentEvidenceThumbnails button[aria-pressed="true"], .incidentEvidenceMain:hover { border-color: var(--primary); }
+.incidentVisualEvidence button:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+.incidentEvidencePlaceholder { min-height: 110px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 20px; background: var(--primary-soft); color: var(--muted); border: 1px solid var(--border); border-radius: 12px; font-size: 13px; }
+.incidentEvidencePlaceholder button { border: 1px solid var(--border); border-radius: 6px; background: var(--panel); color: var(--primary); padding: 6px 12px; cursor: pointer; }
+.incidentEvidenceDialog { width: min(960px, calc(100vw - 32px)); max-height: 90vh; padding: 16px; border: 1px solid var(--border); border-radius: 14px; background: var(--panel); color: var(--text); box-shadow: var(--shadow); }
+.incidentEvidenceDialog::backdrop { background: rgba(15, 39, 64, 0.75); }
+.incidentEvidenceDialogContent { display: flex; flex-direction: column; gap: 12px; }
+.incidentEvidenceDialogContent > img { width: 100%; max-height: 70vh; object-fit: contain; border-radius: 8px; }
+.incidentEvidenceDialogContent p { margin: 0; font-size: 12px; }
+.incidentEvidenceClose { align-self: flex-end; display: grid; place-items: center; padding: 7px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); color: var(--text); cursor: pointer; }

@@ -11,7 +11,7 @@ from .config import (
     EMBEDDING_DIMENSION,
     MODEL_ID,
 )
-from .schemas import EmbedRequest, EmbedResponse, PendingResponse, ScoreRequest, ScoreResponse
+from .schemas import EmbedRequest, EmbedResponse, ScoreRequest, ScoreResponse
 from .embedding import embed_texts, model_loaded
 from .scoring import score_evidence
 

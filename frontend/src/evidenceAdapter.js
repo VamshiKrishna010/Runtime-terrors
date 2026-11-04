@@ -1,4 +1,4 @@
-import { mediaUrl } from './api';
+import { safeUrl } from './api';
 
 export const statusLabel = (status) => ({
   consistent: 'Consistent', needs_review: 'Needs review', conflicting: 'Conflicting',
@@ -26,12 +26,13 @@ export function adaptEvidence(item) {
   const provenance = item.provenance;
   return {
     ...item,
+    label: item.label || `EV-${item.id}`,
     incidentId: String(item.incident_id),
     uploadedAt: item.uploaded_at,
     type: item.type === 'video' ? 'Video' : item.type === 'screenshot' ? 'Screenshot' : 'Image',
     status: statusLabel(item.status),
     score: item.support_contribution,
-    preview: mediaUrl(item.url),
+    preview: safeUrl(item.url),
     previewAlt: `Uploaded evidence for ${item.title} at ${item.location}`,
     review: statusLabel(item.review_state),
     duplicateOf: duplicate.duplicate_of,
@@ -45,11 +46,12 @@ export function adaptEvidence(item) {
       row('EXIF GPS', location.evidence_coordinates ? 'GPS metadata available' : null, location.status),
       row('Software / editing', metadata.editing_software, metadata.editing_software ? 'needs_review' : 'unavailable'),
       row('File type', item.mime_type),
-      row('File size', `${(item.file_size / 1024).toFixed(1)} KB`),
+      row('File size', Number.isFinite(item.file_size) ? `${(item.file_size / 1024).toFixed(1)} KB` : null),
       row('EXIF availability', metadata.exif_available ? 'Available' : 'Unavailable'),
     ],
     provenanceRows: [
       row('Source', provenance.source === 'gallery_upload' ? 'Gallery upload' : 'Unknown'),
+      row('Stored file metadata', provenance.metadata_stripped ? 'EXIF/XMP removed before storage' : 'Withheld (stored before metadata stripping)'),
       row('In-app capture', provenance.in_app_capture === null ? null : provenance.in_app_capture ? 'Yes' : 'No'),
       row('Server received', formatTime(provenance.server_received_at)),
       row('SHA-256 hash', item.sha256_hash),
@@ -61,7 +63,7 @@ export function adaptEvidence(item) {
       row('Similar evidence', `${duplicate.duplicate_count} submission(s)`),
       row('Closest hash distance', duplicate.closest_duplicate_distance),
       row('First seen', formatTime(duplicate.first_seen_at)),
-      row('Earlier evidence', duplicate.duplicate_of ? `EV-${duplicate.duplicate_of}` : 'No earlier match'),
+      row('Earlier evidence', duplicate.duplicate_of || 'No earlier match'),
     ],
     contentRows: [
       row('Reported claim', item.reported_claim),
@@ -84,6 +86,8 @@ export function adaptEvidence(item) {
           : `${Math.round(item.content_consistency.score * 100)}%`
       ),
       row('Explanation', item.content_consistency.reason),
+      row('Authenticity check', item.authenticity ? `${item.authenticity.classification.replace('_', ' ')}${item.authenticity.confidence == null ? '' : ` (${Math.round(item.authenticity.confidence * 100)}% confidence)`}` : null),
+      row('Authenticity notes', item.authenticity?.reason),
     ],
     locationRows: [row('Reported location', item.location), row('Report coordinates', location.reported_coordinates ? 'Provided with report' : null),
       row('EXIF GPS', location.evidence_coordinates ? 'Available in file metadata' : null),

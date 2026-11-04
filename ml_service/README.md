@@ -14,9 +14,16 @@ report-clustering flow.
   canonical location, and a two-hour window remain mandatory cluster guards.
 - `/score` returns the weighted score and the reasons displayed in the UI.
 
-This service is separate from the existing FastAPI/SQLite app in `backend/`.
-The build plan calls for Convex actions to call this service over HTTP. Its
-default development port is 8001 to avoid the existing backend on 8000.
+This service is separate from the vision-analysis service in `backend/`.
+Its default development port is 8001.
+
+**How the live app uses it.** Clustering and scoring run inside Convex. The
+browser computes the description embedding, either through this service's
+`/embed` (when `VITE_ML_SERVICE_URL` is set, as in Docker Compose) or with the
+same MiniLM model running in the browser via transformers.js (the default, and
+what the static GitHub Pages build uses). `/score` mirrors the canonical scorer
+in `frontend/convex/lib/scoring.ts` for offline evaluation; the live app never
+calls it, and clients can no longer write scores.
 
 ## Model decision
 
@@ -101,36 +108,39 @@ The vectors are produced by MiniLM; no placeholder vectors are returned.
   "unique_images": 1,
   "duplicate_images": 0,
   "metadata_conflicts": 0,
-  "location_consistency": 1.0,
-  "time_proximity": null,
+  "time_proximity": 1,
   "visual_match": "unavailable"
 }
 ```
 
-Counts must be nonnegative integers. Agreement and optional consistency values
-must be within [0, 1]. For a single report, use agreement 0; when aggregating
-cosine similarities, clamp negative values to 0. The scoring implementation
-does not treat missing metadata or an unavailable visual check
-as negative evidence. `metadata_conflicts` counts known mismatches only.
-The caller must deduplicate reporter and vote identities before constructing
-counts; this stateless service cannot verify independence from these aggregates.
+Counts must be nonnegative integers; `semantic_agreement` and `time_proximity`
+must be within [0, 1]. Unknown fields are rejected. `location_consistency` was
+removed: clustering already requires the same location, so it awarded every
+incident free points. `time_proximity` counts *other* reports within 30 minutes
+of the newest one (0 for a lone report, 0.5 for one, 1 for two or more).
 
-Success response: `support_score` (0-100), `evidence_level`
-(`Low`, `Emerging`, or `Strong`), and `reasons` (human-readable contribution
-strings). The score measures support, not probability of truth.
+| Signal | Points |
+| --- | --- |
+| Distinct reporter tokens | +12 each, cap +36 |
+| Semantic agreement (mean cosine of clustered reports) | up to +30 |
+| Community confirmations | +5 each, cap +20 |
+| Unique images | +4 each, cap +12 |
+| Corroborating reports within 30 min | up to +10 |
+| Visual match (latest available) | yes +8, partial +4, no -4 |
+| Reused images (pHash Hamming <= 6 or same SHA-256) | -12 each, cap -36 |
+| Metadata conflicts (EXIF time or GPS) | -8 each, cap -24 |
+| Community contradictions | -7 each, cap -28 |
 
-The response includes transparent weighted contributions for reporter diversity,
-semantic agreement, recency, confirmations, images, location, visual agreement,
-duplicates, metadata conflicts, and contradictions. The existing backend scorer
-remains separate.
+Clamped to 0-100. Strong >= 65, Emerging >= 35, otherwise Low. Rounding is
+half-up in both implementations. `shared/scoring_cases.json` is checked against
+this scorer and the Convex one in CI, so changing a weight means changing both.
+The score measures support, not probability of truth.
 
-### Photo analysis boundary
+### Photo analysis
 
-Jas owns EXIF, pHash, and the vision call. The build plan places
-`POST /analyze-photo` at the ML service boundary, but its upload/storage contract
-still needs coordination with Jas. This setup does not implement that route or
-invent a Convex storage format. Vamshi's scorer will accept the resulting
-aggregate evidence signals through `/score`.
+EXIF and pHash are read in the browser from the original file, Convex strips
+the file's metadata before storing it, and `backend/` makes one Groq vision
+request per photo. See the root README.
 
 ## Seed set
 
@@ -164,14 +174,10 @@ by expected cluster. Fixed historical dates work for offline evaluation. A live
 demo seeder must shift all timestamps by the same offset to preserve intervals.
 Preetham owns that database replay script; this file is the labeled ML fixture.
 
-## Next block
+## Known limitations
 
-1. Implement MiniLM loading and `/embed`; verify vector shape, ordering, and normalization.
-2. Evaluate candidate cosine thresholds on all labeled pairs after location/time
-   filtering. Report precision, recall, false merges, and false splits, including
-   the 12 named pair checks. Replay reports chronologically as an integration check.
-3. Treat this small seed set as development data. Check new paraphrases separately
-   before claiming general accuracy; fitting these 30 examples is not validation
-   on unseen reports.
-4. Hand Jas the proposed JSON contracts and 384-dimensional vector index requirement.
-5. Implement `/score` with reason strings during the integration block.
+- The 30-report seed set is development data; fitting it is not validation on
+  unseen reports. Check new paraphrases before claiming general accuracy.
+- The in-browser model is the quantised ONNX export of the same MiniLM, so its
+  cosine similarities can differ slightly from the Python model. The 0.32
+  threshold has not been re-calibrated against the browser model yet.

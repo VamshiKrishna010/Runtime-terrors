@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useMutation, useQuery } from 'convex/react';
 import { Image, Copy, AlertTriangle, CheckCircle2, Search, ShieldCheck, MapPin, XCircle, BrainCircuit } from 'lucide-react';
-import { requestJson } from './api';
+import { api } from '../convex/_generated/api';
 import { adaptEvidence, formatTime } from './evidenceAdapter';
 
 const toneFor = (status) => ['Consistent', 'Strong support', 'Reviewed', 'Strong provenance'].includes(status)
@@ -42,13 +43,13 @@ export function EvidenceCard({ evidence, selected, onSelect, review }) {
     onClick={onSelect} aria-pressed={selected} aria-controls="evidence-inspector">
     <EvidenceMedia evidence={evidence} thumbnail />
     <span className="evidenceCardContent">
-      <span className="evidenceCardTop"><b>EV-{evidence.id}</b><span className="evidenceTypeBadge">{evidence.type}</span><span className="evidenceReviewLabel">{review}</span></span>
+      <span className="evidenceCardTop"><b>{evidence.label}</b><span className="evidenceTypeBadge">{evidence.type}</span><span className="evidenceReviewLabel">{review}</span></span>
       <strong>{evidence.title}</strong>
       <span className="evidenceCardLocation"><MapPin size={13} aria-hidden="true" />{evidence.location}</span>
       <time dateTime={evidence.uploadedAt}>{formatTime(evidence.uploadedAt)}</time>
       <Status>{evidence.status}</Status>
       <span className="evidenceCardBottom"><span>Evidence contribution</span><b>{evidence.score > 0 ? "+" : ""}{evidence.score} points</b></span>
-      {evidence.duplicateOf && <span className="evidenceDuplicate"><Copy size={13} aria-hidden="true" />Reused from EV-{evidence.duplicateOf}</span>}
+      {evidence.duplicateOf && <span className="evidenceDuplicate"><Copy size={13} aria-hidden="true" />Reused from {evidence.duplicateOf}</span>}
     </span>
   </button>;
 }
@@ -80,7 +81,7 @@ export function EvidenceTimeline({ evidence }) {
 
 export function EvidenceInspector({ evidence, onReview, saving, reviewError }) {
   return <aside id="evidence-inspector" className="evidenceInspector" aria-label="Selected evidence detail">
-    <div className="evidenceInspectorHeading"><div><p className="eyebrow">Evidence inspector</p><h2>EV-{evidence.id}</h2></div><Status>{evidence.status}</Status></div>
+    <div className="evidenceInspectorHeading"><div><p className="eyebrow">Evidence inspector</p><h2>{evidence.label}</h2></div><Status>{evidence.status}</Status></div>
     <Panel title="Evidence Preview"><figure className="evidencePreview"><EvidenceMedia evidence={evidence} />
       <figcaption><span>Uploaded {evidence.type.toLowerCase()} evidence</span></figcaption></figure></Panel>
     <Panel title="Evidence information"><p className="evidenceInformationTitle">{evidence.title}</p><Details rows={[
@@ -90,7 +91,7 @@ export function EvidenceInspector({ evidence, onReview, saving, reviewError }) {
     <Panel title="Evidence support summary"><div className="evidenceScore"><strong>{evidence.score > 0 ? '+' : ''}{evidence.score}<small> points</small></strong><Status>{evidence.status}</Status></div>
       <progress max="4" value={Math.max(0, evidence.score)} aria-label="Positive image support contribution (up to 4 points)" />
       <p className="evidenceMuted">Actual image contribution to the incident score: up to +4 per unique image (incident cap +12), or -12 for reused evidence (cap -36). Contribution to incident support, not proof of truth.</p></Panel>
-    <Panel title="Review state"><div className="evidenceReview"><Status>{evidence.review}</Status><span className="evidenceMuted">Saved to the backend</span></div>
+    <Panel title="Review state"><div className="evidenceReview"><Status>{evidence.review}</Status><span className="evidenceMuted">Saved to Convex</span></div>
       <div className="evidenceReviewActions"><button type="button" className="evidencePrimary" disabled={saving || evidence.review === 'Reviewed'} onClick={() => onReview('reviewed')}>Mark reviewed</button>
         <button type="button" className="evidenceFlag" disabled={saving || evidence.review === 'Flagged'} onClick={() => onReview('flagged')}>Flag for review</button></div>
       <p className="evidenceMuted" role="status">{saving ? 'Saving review...' : evidence.review === 'Unreviewed' ? 'Awaiting human review.' : `Review state: ${evidence.review.toLowerCase()}.`}</p>
@@ -101,22 +102,12 @@ export function EvidenceInspector({ evidence, onReview, saving, reviewError }) {
 }
 
 export default function EvidenceCenter() {
-  const [evidence, setEvidence] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [reload, setReload] = useState(0);
+  const rawEvidence = useQuery(api.evidence.list);
+  const reviewEvidence = useMutation(api.evidence.review);
+  const evidence = useMemo(() => (rawEvidence || []).map(adaptEvidence), [rawEvidence]);
+  const loading = rawEvidence === undefined;
   const [saving, setSaving] = useState(false);
   const [reviewError, setReviewError] = useState('');
-  useEffect(() => {
-    const controller = new AbortController();
-    setLoading(true);
-    setError('');
-    requestJson('/evidence', { signal: controller.signal }).then((items) => {
-      if (!controller.signal.aborted) setEvidence(items.map(adaptEvidence));
-    }).catch((error) => { if (!controller.signal.aborted) setError(error.message); })
-      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
-    return () => controller.abort();
-  }, [reload]);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('All');
   const [incident, setIncident] = useState('All');
@@ -137,15 +128,11 @@ export default function EvidenceCenter() {
   useEffect(() => setReviewError(''), [selected?.id]);
   const saveReview = async (review_state) => {
     if (saving || !selected) return;
-    const id = selected.id;
     setSaving(true);
     setReviewError('');
-    try {
-      const updated = adaptEvidence(await requestJson(`/evidence/${id}/review`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ review_state }),
-      }));
-      setEvidence((items) => items.map((item) => item.id === id ? updated : item));
-    } catch (error) { setReviewError(error.message); }
+    // The live query pushes the updated item back; no manual refresh needed.
+    try { await reviewEvidence({ id: selected.id, reviewState: review_state }); }
+    catch (error) { setReviewError((typeof error?.data === 'string' && error.data) || error.message); }
     finally { setSaving(false); }
   };
   const reset = () => { setSearch(''); setStatus('All'); setIncident('All'); setType('All'); setSort('Newest'); };
@@ -153,7 +140,7 @@ export default function EvidenceCenter() {
     <header className="pageHeader"><div><p className="eyebrow">Evidence Intelligence</p><h1>Evidence Center</h1>
       <p>Inspect uploaded evidence, metadata, provenance, consistency, and reuse signals.</p></div>
       <span className="evidenceAnalysisBadge"><BrainCircuit size={16} aria-hidden="true" />Evidence analysis</span></header>
-    <div className="evidenceDemoNotice"><ShieldCheck size={18} aria-hidden="true" /><span>Uploaded evidence and measured file signals support human review; they do not prove truth. Visual AI comparison is not connected.</span></div>
+    <div className="evidenceDemoNotice"><ShieldCheck size={18} aria-hidden="true" /><span>Uploaded evidence and measured file signals support human review; they do not prove truth. Photos are stored with location and camera metadata removed.</span></div>
     <div className="stats">
       <EvidenceSummaryCard title="Total Evidence" value={evidence.length} icon={Image} tone="info" subtitle="Stored report attachments" />
       <EvidenceSummaryCard title="Unique Images" value={evidence.filter((item) => item.type !== 'Video' && !item.duplicateOf).length} icon={ShieldCheck} tone="success" subtitle="Distinct images and screenshots" />
@@ -168,7 +155,6 @@ export default function EvidenceCenter() {
       <label>Sort by<select value={sort} onChange={(event) => setSort(event.target.value)}>{['Newest', 'Highest support', 'Needs review', 'Duplicate first'].map((value) => <option key={value}>{value}</option>)}</select></label>
     </div>
     {loading ? <div className="evidenceEmpty" role="status">Loading evidence...</div>
-      : error ? <div className="evidenceEmpty" role="alert"><p>{error}</p><button type="button" onClick={() => setReload((value) => value + 1)}>Retry</button></div>
       : evidence.length === 0 ? <div className="evidenceEmpty"><Image size={36} aria-hidden="true" /><h2>No evidence uploaded yet</h2><p>Evidence attached to incident reports will appear here for analysis.</p></div>
       : filtered.length === 0 ? <div className="evidenceEmpty"><Search size={32} aria-hidden="true" /><h2>No matching evidence</h2><p>Try another search or clear your filters.</p><button type="button" onClick={reset}>Clear filters</button></div>
       : <div className="evidenceWorkspace"><section className="evidenceGallery" aria-label="Evidence gallery"><div className="evidenceGalleryHeading"><h2>Evidence library</h2><span role="status">{filtered.length} of {evidence.length} items</span></div>

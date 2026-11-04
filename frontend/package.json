@@ -6,18 +6,22 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "typecheck": "tsc -p convex",
+    "test": "node tests/verify-convex-logic.mjs && node tests/verify-evidence.mjs && node tests/verify-login-analytics.mjs"
   },
   "dependencies": {
-    "@vitejs/plugin-react": "latest",
-    "convex": "^1.46.0",
-    "leaflet": "^1.9.4",
-    "lucide-react": "latest",
-    "react": "latest",
-    "react-dom": "latest",
-    "react-leaflet": "^5.0.0",
-    "recharts": "^3.10.1",
-    "typescript": "latest",
-    "vite": "latest"
+    "@huggingface/transformers": "4.3.1",
+    "@vitejs/plugin-react": "6.1.1",
+    "convex": "1.46.0",
+    "exifr": "7.1.3",
+    "leaflet": "1.9.4",
+    "lucide-react": "1.48.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-leaflet": "5.0.0",
+    "recharts": "3.10.1",
+    "typescript": "7.0.2",
+    "vite": "8.3.1"
   }
 }

@@ -15,13 +15,14 @@ export default function IncidentEvidence({ incident }) {
   }
 
   const images = reports.map((report) => report.imageUrl).filter(Boolean);
+  const withheld = reports.filter((report) => report.imageWithheld).length;
   const available = images.filter((url) => !failed.includes(url));
   const main = available.includes(activeUrl) ? activeUrl : available[0];
   const failImage = (url) => setFailed((current) => [...new Set([...current, url])]);
 
   return <section className="incidentVisualEvidence" aria-label="Incident evidence">
     <h3>Evidence</h3>
-    {!main ? <div className="incidentEvidencePlaceholder"><Image size={25} aria-hidden="true" /><span>No visual evidence attached</span></div>
+    {!main ? <div className="incidentEvidencePlaceholder"><Image size={25} aria-hidden="true" /><span>{withheld ? `${withheld} older photo${withheld === 1 ? ' is' : 's are'} withheld because ${withheld === 1 ? 'it was' : 'they were'} stored with location metadata` : 'No visual evidence attached'}</span></div>
       : <>
         <button type="button" className="incidentEvidenceMain" ref={triggerRef}
           aria-label={`Open larger evidence image for ${incident.title}`} onClick={() => dialogRef.current?.showModal()}>

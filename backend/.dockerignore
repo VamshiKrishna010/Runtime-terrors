@@ -5,3 +5,6 @@ __pycache__
 .git
 .pytest_cache
 .DS_Store
+uploads
+*.db
+tests
