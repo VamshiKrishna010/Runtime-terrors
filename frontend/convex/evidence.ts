@@ -26,10 +26,10 @@ function contributions(images: Doc<"reports">[]) {
 }
 
 function evidenceStatus(report: Doc<"reports">) {
-  const statuses = [report.captureTimeStatus, report.gpsStatus];
-  if (statuses.includes("conflicting")) return "metadata_conflict";
+  const statuses = new Set([report.captureTimeStatus, report.gpsStatus]);
+  if (statuses.has("conflicting")) return "metadata_conflict";
   if (report.duplicateEvidence) return "duplicate";
-  if (statuses.includes("consistent") && !statuses.includes("needs_review")) return "consistent";
+  if (statuses.has("consistent") && !statuses.has("needs_review")) return "consistent";
   return "needs_review";
 }
 
@@ -58,6 +58,9 @@ export const list = query({
         { title: "Support score recalculated", timestamp: iso(report.createdAt) },
         ...(report.reviewedAt ? [{ title: `Human review updated: ${report.reviewState}`, timestamp: iso(report.reviewedAt) }] : []),
       ];
+      let duplicateStatus = "No duplicate evidence found";
+      if (report.duplicateDistance === 0) duplicateStatus = "Exact duplicate detected";
+      else if (report.duplicateEvidence) duplicateStatus = "Near-duplicate detected";
       return {
         id: report._id,
         label: evidenceLabel(report._id),
@@ -89,7 +92,7 @@ export const list = query({
           metadata_stripped: Boolean(report.imageSanitized),
         },
         duplicate_analysis: {
-          status: report.duplicateDistance === 0 ? "Exact duplicate detected" : report.duplicateEvidence ? "Near-duplicate detected" : "No duplicate evidence found",
+          status: duplicateStatus,
           duplicate_count: report.duplicateCount ?? (report.duplicateEvidence ? 1 : 0),
           closest_duplicate_distance: report.duplicateDistance ?? null,
           duplicate_of: report.duplicateOf ? evidenceLabel(report.duplicateOf) : null,
@@ -133,7 +136,7 @@ export const review = mutation({
   args: { id: v.id("reports"), reviewState },
   handler: async (ctx, args) => {
     const report = await ctx.db.get(args.id);
-    if (!report || !report.imageStorageId) throw new ConvexError("Evidence not found");
+    if (!report?.imageStorageId) throw new ConvexError("Evidence not found");
     if (report.reviewState !== args.reviewState) {
       await ctx.db.patch(args.id, { reviewState: args.reviewState, reviewedAt: Date.now() });
     }

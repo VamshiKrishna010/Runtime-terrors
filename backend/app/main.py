@@ -8,6 +8,7 @@ still submit; they just carry no vision result.
 """
 import math
 import os
+from typing import Annotated
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
@@ -31,8 +32,20 @@ def create_app(limiter=None, vision_client=None):
     def health():
         return {"ok": True, "vision_configured": bool(vision.api_key() or vision_client)}
 
-    @app.post("/evidence/analyze", response_model=vision.VisionResult)
-    async def analyze_evidence(request: Request, image: UploadFile = File(...), description: str = Form("", max_length=4000)):
+    @app.post(
+        "/evidence/analyze",
+        response_model=vision.VisionResult,
+        responses={
+            413: {"description": "The uploaded photo exceeds 10 MB."},
+            422: {"description": "The upload is not a supported image."},
+            429: {"description": "The per-client or global rate limit was reached."},
+        },
+    )
+    async def analyze_evidence(
+        request: Request,
+        image: Annotated[UploadFile, File()],
+        description: Annotated[str, Form(max_length=4000)] = "",
+    ):
         wait = app.state.limiter.check(client_key(request))
         if wait:
             raise HTTPException(429, "Too many analysis requests. Please wait and try again.",

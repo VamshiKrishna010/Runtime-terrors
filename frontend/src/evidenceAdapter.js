@@ -24,6 +24,13 @@ export function adaptEvidence(item) {
   const location = item.location_consistency;
   const duplicate = item.duplicate_analysis;
   const provenance = item.provenance;
+  let authenticity = null;
+  if (item.authenticity) {
+    const confidence = item.authenticity.confidence == null
+      ? ''
+      : ` (${Math.round(item.authenticity.confidence * 100)}% confidence)`;
+    authenticity = `${item.authenticity.classification.replace('_', ' ')}${confidence}`;
+  }
   return {
     ...item,
     label: item.label || `EV-${item.id}`,
@@ -86,7 +93,7 @@ export function adaptEvidence(item) {
           : `${Math.round(item.content_consistency.score * 100)}%`
       ),
       row('Explanation', item.content_consistency.reason),
-      row('Authenticity check', item.authenticity ? `${item.authenticity.classification.replace('_', ' ')}${item.authenticity.confidence == null ? '' : ` (${Math.round(item.authenticity.confidence * 100)}% confidence)`}` : null),
+      row('Authenticity check', authenticity),
       row('Authenticity notes', item.authenticity?.reason),
     ],
     locationRows: [row('Reported location', item.location), row('Report coordinates', location.reported_coordinates ? 'Provided with report' : null),

@@ -1437,10 +1437,10 @@ textarea {
   z-index: 1;
 }
 
-.custom-map-marker {
-  background: transparent !important;
+.leaflet-marker-icon.custom-map-marker {
+  background: transparent;
 
-  border: 0 !important;
+  border: 0;
 }
 
 .mapPopup {
@@ -1493,24 +1493,24 @@ textarea {
   box-shadow: none;
 }
 
-.leaflet-control-zoom {
-  border: 0 !important;
+.realCampusMap .leaflet-control-zoom {
+  border: 0;
 
   box-shadow:
     0 4px 14px
-    rgba(15, 39, 64, 0.12) !important;
+    rgba(15, 39, 64, 0.12);
 }
 
-.leaflet-control-zoom a {
-  color: #10233c !important;
+.realCampusMap .leaflet-control-zoom a {
+  color: #10233c;
 
   border-bottom:
     1px solid
-    #e4eaf0 !important;
+    #e4eaf0;
 }
 
-.leaflet-control-attribution {
-  font-size: 9px !important;
+.realCampusMap .leaflet-control-attribution {
+  font-size: 9px;
 }
 
 /* MAP STATS */
@@ -2298,6 +2298,17 @@ textarea {
   to {
     transform:
       rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .spin,
+  .analyticsLoading .analyticsSkeleton {
+    animation: none;
   }
 }
 

@@ -6,7 +6,7 @@ export class UnsupportedImageError extends Error {
 }
 
 const ascii = (bytes: Uint8Array, start: number, length: number) =>
-  String.fromCharCode(...bytes.subarray(start, start + length));
+  String.fromCodePoint(...bytes.subarray(start, start + length));
 const u32be = (bytes: Uint8Array, offset: number) =>
   ((bytes[offset] << 24) | (bytes[offset + 1] << 16) | (bytes[offset + 2] << 8) | bytes[offset + 3]) >>> 0;
 const u32le = (bytes: Uint8Array, offset: number) =>
@@ -27,15 +27,30 @@ const join = (parts: Uint8Array[]) => {
   return result;
 };
 
+function jpegMarker(bytes: Uint8Array, offset: number) {
+  if (bytes[offset] !== 0xff) throw new UnsupportedImageError("The JPEG file is malformed.");
+  const markerOffset = offset;
+  while (bytes[offset] === 0xff) offset += 1;
+  return { markerOffset, marker: bytes[offset], nextOffset: offset + 1 };
+}
+
+function jpegSegmentEnd(bytes: Uint8Array, offset: number) {
+  if (offset + 2 > bytes.length) throw new UnsupportedImageError("The JPEG file is truncated.");
+  const length = (bytes[offset] << 8) | bytes[offset + 1];
+  const end = offset + length;
+  if (length < 2 || end > bytes.length) throw new UnsupportedImageError("The JPEG file is malformed.");
+  return end;
+}
+
+const standaloneJpegMarker = (marker: number) => marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7);
+const jpegMetadataMarker = (marker: number) => (marker >= 0xe0 && marker <= 0xef) || marker === 0xfe;
+
 function stripJpeg(bytes: Uint8Array) {
   const parts = [bytes.slice(0, 2)];
   let offset = 2;
   while (offset < bytes.length) {
-    if (bytes[offset] !== 0xff) throw new UnsupportedImageError("The JPEG file is malformed.");
-    let markerOffset = offset;
-    while (bytes[offset] === 0xff) offset += 1;
-    const marker = bytes[offset];
-    offset += 1;
+    const { markerOffset, marker, nextOffset } = jpegMarker(bytes, offset);
+    offset = nextOffset;
     if (marker === 0xd9) {
       parts.push(bytes.slice(markerOffset, offset));
       return join(parts);
@@ -44,16 +59,12 @@ function stripJpeg(bytes: Uint8Array) {
       parts.push(bytes.slice(markerOffset));
       return join(parts);
     }
-    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
+    if (standaloneJpegMarker(marker)) {
       parts.push(bytes.slice(markerOffset, offset));
       continue;
     }
-    if (offset + 2 > bytes.length) throw new UnsupportedImageError("The JPEG file is truncated.");
-    const length = (bytes[offset] << 8) | bytes[offset + 1];
-    const end = offset + length;
-    if (length < 2 || end > bytes.length) throw new UnsupportedImageError("The JPEG file is malformed.");
-    const metadata = (marker >= 0xe0 && marker <= 0xef) || marker === 0xfe;
-    if (!metadata) parts.push(bytes.slice(markerOffset, end));
+    const end = jpegSegmentEnd(bytes, offset);
+    if (!jpegMetadataMarker(marker)) parts.push(bytes.slice(markerOffset, end));
     offset = end;
   }
   throw new UnsupportedImageError("The JPEG file has no image data.");

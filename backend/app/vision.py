@@ -9,7 +9,6 @@ import base64
 import json
 import logging
 import os
-import re
 from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
@@ -80,10 +79,18 @@ def api_key() -> Optional[str]:
 
 def parse_model_output(text: str) -> VisionResult:
     """Validate each part independently so one bad field does not discard the rest."""
-    cleaned = re.sub(r"^```(?:json)?\s*|\s*```$", "", (text or "").strip())
-    match = re.search(r"\{.*\}", cleaned, re.DOTALL)
+    cleaned = (text or "").strip()
+    if cleaned.startswith("```"):
+        first_line, separator, remainder = cleaned.partition("\n")
+        if first_line.strip().lower() in {"```", "```json"} and separator:
+            cleaned = remainder
+    if cleaned.rstrip().endswith("```"):
+        cleaned = cleaned.rstrip()[:-3].rstrip()
+    start = cleaned.find("{")
+    end = cleaned.rfind("}")
+    candidate = cleaned[start:end + 1] if 0 <= start <= end else cleaned
     try:
-        data = json.loads(match.group(0) if match else cleaned)
+        data = json.loads(candidate)
     except (json.JSONDecodeError, TypeError):
         return unavailable("The vision model did not return valid JSON.")
     if not isinstance(data, dict):

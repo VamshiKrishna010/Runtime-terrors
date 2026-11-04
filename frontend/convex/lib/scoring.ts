@@ -72,9 +72,12 @@ export function scoreEvidence(input: ScoreInput) {
   if (metadata) reasons.push(`${plural(conflictCount, "metadata conflict")} (-${metadata})`);
   if (contradictions) reasons.push(`${plural(contradictionsCount, "community contradiction")} (-${contradictions})`);
 
+  let evidenceLevel = "Low";
+  if (supportScore >= WEIGHTS.strongAt) evidenceLevel = "Strong";
+  else if (supportScore >= WEIGHTS.emergingAt) evidenceLevel = "Emerging";
   return {
     support_score: supportScore,
-    evidence_level: supportScore >= WEIGHTS.strongAt ? "Strong" : supportScore >= WEIGHTS.emergingAt ? "Emerging" : "Low",
+    evidence_level: evidenceLevel,
     reasons,
   };
 }

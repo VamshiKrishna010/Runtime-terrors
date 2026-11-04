@@ -27,10 +27,10 @@ services:
       - backend
       - ml
     ports:
-      - "5173:80"
+      - "5173:8080"
 
   tunnel:
     image: cloudflare/cloudflared:2024.12.2
-    command: tunnel --no-autoupdate --url http://frontend:80
+    command: tunnel --no-autoupdate --url http://frontend:8080
     depends_on:
       - frontend

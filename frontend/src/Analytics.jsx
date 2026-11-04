@@ -149,9 +149,16 @@ const Analytics = forwardRef(function Analytics({ renderHeaderControls, onSelect
     try { await onSelectIncident(id); }
     catch (error) { setNavigationError(`Unable to open incident: ${error.message}`); }
   };
+  let content = null;
+  if (loading) content = <AnalyticsLoading />;
+  else if (error) content = <AnalyticsError retry={() => setFilters({ ...filters })} />;
+  else if (data) content = <AnalyticsContent data={data} onSelectIncident={selectIncident} navigationError={navigationError} />;
+  let liveStatus = 'Live data';
+  if (error) liveStatus = 'Unavailable';
+  else if (loading) liveStatus = 'Loading data';
   return <div className="analyticsPage">
     <header className="pageHeader"><div><p className="eyebrow">Operational Intelligence</p><h1>Analytics</h1><p>Understand incident patterns, evidence quality, reporting activity, and community response across campus.</p></div>
-      <div className="analyticsHeaderActions"><span className={`analyticsLiveStatus${error ? ' error' : ''}`}><Activity size={14} aria-hidden="true" />{error ? 'Unavailable' : loading ? 'Loading data' : 'Live data'}</span>{renderHeaderControls?.(loading)}</div>
+      <div className="analyticsHeaderActions"><span className={`analyticsLiveStatus${error ? ' error' : ''}`}><Activity size={14} aria-hidden="true" />{liveStatus}</span>{renderHeaderControls?.(loading)}</div>
     </header>
     <div className="analyticsFilters">
       <label>Time range<select value={filters.range} onChange={(event) => change('range', event.target.value)}><option value="24h">Last 24 hours</option><option value="7d">Last 7 days</option><option value="30d">Last 30 days</option><option value="all">All time</option></select></label>
@@ -161,7 +168,7 @@ const Analytics = forwardRef(function Analytics({ renderHeaderControls, onSelect
       <button type="button" onClick={() => setFilters({ ...DEFAULT_FILTERS })}>Reset filters</button>
     </div>
     <p className="analyticsScope">Analytics reads the same live Convex data as Live Incidents. Time range selects clusters created in the window and their reports/uploads in that window. Votes, support and review states are current totals for those clusters. Active means current clusters; no resolved status is tracked.</p>
-    {loading ? <AnalyticsLoading /> : error ? <AnalyticsError retry={() => setFilters({ ...filters })} /> : data && <AnalyticsContent data={data} onSelectIncident={selectIncident} navigationError={navigationError} />}
+    {content}
   </div>;
 });
 export default Analytics;

@@ -19,7 +19,8 @@ export function exifTimestamp(value, offset) {
   const [, year, month, day, hour, minute, second] = match;
   const zone = /^[+-]\d{2}:\d{2}$/.test(String(offset || '')) ? offset : '';
   const iso = `${year}-${month}-${day}T${hour}:${minute}:${second}${zone}`;
-  return Number.isNaN(Date.parse(zone ? iso : `${iso}Z`)) ? undefined : iso;
+  const timestamp = zone ? iso : `${iso}Z`;
+  return Number.isNaN(Date.parse(timestamp)) ? undefined : iso;
 }
 
 /**
@@ -95,5 +96,5 @@ async function readExif(file) {
 /** All measurements, omitting anything unavailable (Convex rejects nulls). */
 export async function measureImage(file) {
   const [decoded, exif] = await Promise.all([decodeForHash(file).catch(() => ({})), readExif(file)]);
-  return Object.fromEntries(Object.entries({ ...decoded, ...exif }).filter(([, value]) => value !== undefined && value !== null && value !== ''));
+  return Object.fromEntries(Object.entries({ ...decoded, ...exif }).filter(([, value]) => value !== undefined && value !== ''));
 }

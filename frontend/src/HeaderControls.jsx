@@ -136,7 +136,7 @@ export default function HeaderControls({ refresh, loading, refreshLabel = 'incid
               onClick={() => setNotice('Settings are coming soon.')}>Settings</button>
             <button type="button" className="headerPopoverAction"
               onClick={signOut}>Sign out</button>
-            <p className="headerPopoverNote" role="status">{notice}</p>
+            <output className="headerPopoverNote">{notice}</output>
           </section>
         )}
       </div>

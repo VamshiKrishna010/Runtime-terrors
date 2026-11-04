@@ -98,6 +98,9 @@ export function scoreInputFor(incident: ScoreIncident, reports: ScoreReport[]): 
     .sort((a, b) => b.createdAt - a.createdAt)
     .map((report) => report.visualMatch)
     .find((value): value is VisualMatch => value === "yes" || value === "partial" || value === "no") ?? "unavailable";
+  let timeProximity = 0;
+  if (nearby >= 2) timeProximity = 1;
+  else if (nearby === 1) timeProximity = 0.5;
   return {
     distinct_reporters: new Set(reports.map((report) => report.reporterToken)).size,
     semantic_agreement: similarities.length ? similarities.reduce((sum, value) => sum + value, 0) / similarities.length : 0,
@@ -106,7 +109,7 @@ export function scoreInputFor(incident: ScoreIncident, reports: ScoreReport[]): 
     unique_images: reports.filter((report) => report.imageStorageId && !report.duplicateEvidence).length,
     duplicate_images: reports.filter((report) => report.imageStorageId && report.duplicateEvidence).length,
     metadata_conflicts: reports.filter(hasMetadataConflict).length,
-    time_proximity: nearby >= 2 ? 1 : nearby === 1 ? 0.5 : 0,
+    time_proximity: timeProximity,
     visual_match: visual,
   };
 }
