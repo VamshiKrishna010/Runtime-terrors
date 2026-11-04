@@ -2,6 +2,7 @@ import { action, internalMutation, mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { ConvexError, v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
+import type { MutationCtx } from "./_generated/server";
 import {
   CLUSTER_SIMILARITY_THRESHOLD,
   CLUSTER_WINDOW_MS,
@@ -67,6 +68,161 @@ const clip = (value: string | undefined, max: number) => {
 };
 const unit = (value: number) => (Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0);
 
+type ImageMeasurements = {
+  phash?: string;
+  width?: number;
+  height?: number;
+  exifDatetime?: string;
+  exifGps?: { latitude: number; longitude: number };
+  cameraDevice?: string;
+  editingSoftware?: string;
+};
+type VisionData = {
+  summary?: string;
+  authenticity?: { classification: "likely_real" | "uncertain" | "suspicious"; confidence: number; reason: string };
+  visualComparison?: { match: "yes" | "partial" | "no" | "unavailable"; confidence: number; reason: string };
+};
+type StoredImage = { storageId: Id<"_storage">; mimeType: string; fileSize: number; sha256: string };
+type InsertArgs = {
+  reporterToken: string;
+  description: string;
+  category: string;
+  location: string;
+  latitude?: number;
+  longitude?: number;
+  embedding: number[];
+  imageStorageId?: Id<"_storage">;
+  image?: ImageMeasurements;
+  vision?: VisionData;
+  storedImage?: StoredImage;
+};
+type NormalizedReport = { reporterToken: string; description: string; location: string; embedding: number[] };
+type DuplicateResult = { of?: Id<"reports">; distance?: number; count: number; phash?: string };
+
+function normalizeReport(args: InsertArgs): NormalizedReport {
+  const reporterToken = args.reporterToken.trim();
+  const description = args.description.trim();
+  const location = args.location.trim().replace(/\s+/g, " ");
+  if (!TOKEN_PATTERN.test(reporterToken)) fail("Invalid reporter token. Reload the page and try again.");
+  if (description.length < 10 || description.length > 4000) fail("Descriptions must be 10 to 4,000 characters.");
+  if (!location || location.length > 300) fail("Locations must be 1 to 300 characters.");
+  if (!CATEGORIES.includes(args.category)) fail("Unsupported category.");
+  if ((args.latitude === undefined) !== (args.longitude === undefined)) fail("Provide both latitude and longitude.");
+  if (args.latitude !== undefined && (Math.abs(args.latitude) > 90 || Math.abs(args.longitude!) > 180)) fail("Invalid coordinates.");
+  if (args.embedding.length !== EMBEDDING_DIMENSION || !args.embedding.every(Number.isFinite)) fail("Invalid description embedding.");
+  const magnitude = Math.sqrt(args.embedding.reduce((sum, value) => sum + value * value, 0));
+  if (!magnitude) fail("Invalid description embedding.");
+  return { reporterToken, description, location, embedding: args.embedding.map((value) => value / magnitude) };
+}
+
+async function enforceReportLimit(ctx: MutationCtx, reporterToken: string, createdAt: number) {
+  const recent = await ctx.db
+    .query("reports")
+    .withIndex("by_reporter", (query) => query.eq("reporterToken", reporterToken).gt("createdAt", createdAt - REPORTS_PER_TOKEN_WINDOW.ms))
+    .take(REPORTS_PER_TOKEN_WINDOW.count);
+  if (recent.length >= REPORTS_PER_TOKEN_WINDOW.count) fail("Too many reports from this device. Please wait a few minutes.");
+}
+
+async function bestCluster(ctx: MutationCtx, args: InsertArgs, normalized: NormalizedReport, createdAt: number) {
+  const candidates = await ctx.db
+    .query("reports")
+    .withIndex("by_created_at", (query) => query.gte("createdAt", createdAt - CLUSTER_WINDOW_MS))
+    .collect();
+  let incidentId: Id<"incidents"> | undefined;
+  let semanticSimilarity = 0;
+  const locationKey = normalizeLocation(normalized.location);
+  for (const report of candidates) {
+    if (!report.embedding || report.category !== args.category || normalizeLocation(report.location) !== locationKey) continue;
+    const similarity = cosineSimilarity(normalized.embedding, report.embedding);
+    if (similarity >= CLUSTER_SIMILARITY_THRESHOLD && similarity > semanticSimilarity) {
+      incidentId = report.incidentId;
+      semanticSimilarity = similarity;
+    }
+  }
+  return { incidentId, semanticSimilarity };
+}
+
+async function resolveIncident(ctx: MutationCtx, args: InsertArgs, normalized: NormalizedReport, createdAt: number, candidate?: Id<"incidents">) {
+  if (!candidate) {
+    const incidentId = await ctx.db.insert("incidents", {
+      title: `${args.category}: ${normalized.description.slice(0, 72)}`,
+      category: args.category,
+      location: normalized.location,
+      latitude: args.latitude,
+      longitude: args.longitude,
+      supportScore: 0,
+      evidenceLevel: "Low",
+      confirmations: 0,
+      contradictions: 0,
+      reportCount: 0,
+      createdAt,
+    });
+    return { incidentId, clustered: false };
+  }
+  if (args.latitude !== undefined) {
+    const incident = await ctx.db.get(candidate);
+    if (incident?.latitude === undefined) await ctx.db.patch(candidate, { latitude: args.latitude, longitude: args.longitude });
+  }
+  return { incidentId: candidate, clustered: true };
+}
+
+async function duplicateFor(ctx: MutationCtx, storedImage?: StoredImage, measurements?: ImageMeasurements): Promise<DuplicateResult> {
+  if (!storedImage) return { count: 0 };
+  const exact = await ctx.db.query("reports").withIndex("by_sha256", (query) => query.eq("imageSha256", storedImage.sha256)).collect();
+  const phash = measurements?.phash && /^[0-9a-f]{16}$/i.test(measurements.phash) ? measurements.phash.toLowerCase() : undefined;
+  const hashed = phash
+    ? await ctx.db.query("reports").withIndex("by_phash", (query) => query.gte("imagePhash", "")).collect()
+    : [];
+  const matches = new Map<Id<"reports">, { report: Doc<"reports">; distance: number }>();
+  for (const report of exact) matches.set(report._id, { report, distance: 0 });
+  for (const report of hashed) {
+    const distance = hammingDistance(phash, report.imagePhash);
+    if (distance !== null && distance <= PHASH_DUPLICATE_DISTANCE && !matches.has(report._id)) {
+      matches.set(report._id, { report, distance });
+    }
+  }
+  const values = [...matches.values()];
+  values.sort((a, b) => a.report.createdAt - b.report.createdAt);
+  const earliest = values[0];
+  return {
+    of: earliest?.report._id,
+    distance: earliest ? Math.min(...values.map((match) => match.distance)) : undefined,
+    count: matches.size,
+    phash,
+  };
+}
+
+function validGps(image?: ImageMeasurements) {
+  const gps = image?.exifGps;
+  if (!gps || Math.abs(gps.latitude) > 90 || Math.abs(gps.longitude) > 180) return undefined;
+  return gps;
+}
+
+function storedImageFields(storedImage: StoredImage | undefined, image: ImageMeasurements | undefined, duplicate: DuplicateResult, createdAt: number, gps: ReturnType<typeof validGps>, gpsCheck: ReturnType<typeof gpsConsistency>, exifDatetime?: string) {
+  if (!storedImage) return {};
+  return {
+    imageStorageId: storedImage.storageId,
+    imageSanitized: true,
+    imageMimeType: storedImage.mimeType,
+    imageFileSize: storedImage.fileSize,
+    imageSha256: storedImage.sha256,
+    imagePhash: duplicate.phash,
+    imageWidth: Number.isInteger(image?.width) ? image!.width : undefined,
+    imageHeight: Number.isInteger(image?.height) ? image!.height : undefined,
+    exifDatetime,
+    hasExifGps: Boolean(gps),
+    exifGpsDistanceMeters: gpsCheck.distanceMeters,
+    cameraDevice: clip(image?.cameraDevice, 200),
+    editingSoftware: clip(image?.editingSoftware, 200),
+    captureTimeStatus: captureTimeConsistency(createdAt, exifDatetime).status,
+    gpsStatus: gpsCheck.status,
+    duplicateOf: duplicate.of,
+    duplicateDistance: duplicate.distance,
+    duplicateCount: duplicate.count,
+    reviewState: "unreviewed" as const,
+  };
+}
+
 /** Short-lived URL the browser uploads the original photo to. */
 export const generateUploadUrl = mutation({
   args: {},
@@ -127,114 +283,26 @@ export const insertClustered = internalMutation({
   },
   handler: async (ctx, args) => {
     const createdAt = Date.now();
-    const reporterToken = args.reporterToken.trim();
-    const description = args.description.trim();
-    const location = args.location.trim().replace(/\s+/g, " ");
-    if (!TOKEN_PATTERN.test(reporterToken)) fail("Invalid reporter token. Reload the page and try again.");
-    if (description.length < 10 || description.length > 4000) fail("Descriptions must be 10 to 4,000 characters.");
-    if (!location || location.length > 300) fail("Locations must be 1 to 300 characters.");
-    if (!CATEGORIES.includes(args.category)) fail("Unsupported category.");
-    if ((args.latitude === undefined) !== (args.longitude === undefined)) fail("Provide both latitude and longitude.");
-    if (args.latitude !== undefined && (Math.abs(args.latitude) > 90 || Math.abs(args.longitude!) > 180)) fail("Invalid coordinates.");
-    if (args.embedding.length !== EMBEDDING_DIMENSION || !args.embedding.every(Number.isFinite)) fail("Invalid description embedding.");
-    const magnitude = Math.sqrt(args.embedding.reduce((sum, value) => sum + value * value, 0));
-    if (!magnitude) fail("Invalid description embedding.");
-    const embedding = args.embedding.map((value) => value / magnitude);
-
-    const recentByReporter = await ctx.db
-      .query("reports")
-      .withIndex("by_reporter", (q) => q.eq("reporterToken", reporterToken).gt("createdAt", createdAt - REPORTS_PER_TOKEN_WINDOW.ms))
-      .take(REPORTS_PER_TOKEN_WINDOW.count);
-    if (recentByReporter.length >= REPORTS_PER_TOKEN_WINDOW.count) fail("Too many reports from this device. Please wait a few minutes.");
-
-    // Only reports inside the clustering window are candidates (indexed range).
-    const locationKey = normalizeLocation(location);
-    const candidates = await ctx.db
-      .query("reports")
-      .withIndex("by_created_at", (q) => q.gte("createdAt", createdAt - CLUSTER_WINDOW_MS))
-      .collect();
-    let incidentId: Id<"incidents"> | undefined;
-    let semanticSimilarity = 0;
-    for (const report of candidates) {
-      if (!report.embedding || report.category !== args.category || normalizeLocation(report.location) !== locationKey) continue;
-      const similarity = cosineSimilarity(embedding, report.embedding);
-      if (similarity >= CLUSTER_SIMILARITY_THRESHOLD && similarity > semanticSimilarity) {
-        incidentId = report.incidentId;
-        semanticSimilarity = similarity;
-      }
-    }
-    const clustered = incidentId !== undefined;
-    if (!incidentId) {
-      incidentId = await ctx.db.insert("incidents", {
-        title: `${args.category}: ${description.slice(0, 72)}`,
-        category: args.category,
-        location,
-        latitude: args.latitude,
-        longitude: args.longitude,
-        supportScore: 0,
-        evidenceLevel: "Low",
-        confirmations: 0,
-        contradictions: 0,
-        reportCount: 0,
-        createdAt,
-      });
-    } else if (args.latitude !== undefined) {
-      const incident = await ctx.db.get(incidentId);
-      if (incident && incident.latitude === undefined) await ctx.db.patch(incidentId, { latitude: args.latitude, longitude: args.longitude });
-    }
-
-    const image = args.storedImage ? args.image ?? {} : undefined;
-    let duplicate: { of?: Id<"reports">; distance?: number; count: number } = { count: 0 };
-    if (args.storedImage) {
-      const exact = await ctx.db.query("reports").withIndex("by_sha256", (q) => q.eq("imageSha256", args.storedImage!.sha256)).collect();
-      const phash = image?.phash && /^[0-9a-f]{16}$/i.test(image.phash) ? image.phash.toLowerCase() : undefined;
-      // Range over the pHash index skips every report without an image hash.
-      const hashed = phash ? await ctx.db.query("reports").withIndex("by_phash", (q) => q.gte("imagePhash", "")).collect() : [];
-      const matches = new Map<Id<"reports">, { report: Doc<"reports">; distance: number }>();
-      for (const report of exact) matches.set(report._id, { report, distance: 0 });
-      for (const report of hashed) {
-        const distance = hammingDistance(phash, report.imagePhash);
-        if (distance !== null && distance <= PHASH_DUPLICATE_DISTANCE && !matches.has(report._id)) matches.set(report._id, { report, distance });
-      }
-      const earliest = [...matches.values()].sort((a, b) => a.report.createdAt - b.report.createdAt)[0];
-      duplicate = { of: earliest?.report._id, distance: earliest ? Math.min(...[...matches.values()].map((m) => m.distance)) : undefined, count: matches.size };
-      if (image) image.phash = phash;
-    }
-
-    const gps = image?.exifGps && Math.abs(image.exifGps.latitude) <= 90 && Math.abs(image.exifGps.longitude) <= 180 ? image.exifGps : undefined;
+    const normalized = normalizeReport(args);
+    await enforceReportLimit(ctx, normalized.reporterToken, createdAt);
+    const candidate = await bestCluster(ctx, args, normalized, createdAt);
+    const { incidentId, clustered } = await resolveIncident(ctx, args, normalized, createdAt, candidate.incidentId);
+    const image = args.storedImage ? args.image : undefined;
+    const duplicate = await duplicateFor(ctx, args.storedImage, image);
+    const gps = validGps(image);
     const gpsCheck = gpsConsistency(args, gps);
     const exifDatetime = clip(image?.exifDatetime, 40);
     const vision = args.storedImage ? args.vision : undefined;
 
     const reportId = await ctx.db.insert("reports", {
       incidentId,
-      reporterToken,
-      description,
+      reporterToken: normalized.reporterToken,
+      description: normalized.description,
       category: args.category,
-      location,
+      location: normalized.location,
       latitude: args.latitude,
       longitude: args.longitude,
-      ...(args.storedImage && {
-        imageStorageId: args.storedImage.storageId,
-        imageSanitized: true,
-        imageMimeType: args.storedImage.mimeType,
-        imageFileSize: args.storedImage.fileSize,
-        imageSha256: args.storedImage.sha256,
-        imagePhash: image?.phash,
-        imageWidth: Number.isInteger(image?.width) ? image!.width : undefined,
-        imageHeight: Number.isInteger(image?.height) ? image!.height : undefined,
-        exifDatetime,
-        hasExifGps: Boolean(gps),
-        exifGpsDistanceMeters: gpsCheck.distanceMeters,
-        cameraDevice: clip(image?.cameraDevice, 200),
-        editingSoftware: clip(image?.editingSoftware, 200),
-        captureTimeStatus: captureTimeConsistency(createdAt, exifDatetime).status,
-        gpsStatus: gpsCheck.status,
-        duplicateOf: duplicate.of,
-        duplicateDistance: duplicate.distance,
-        duplicateCount: duplicate.count,
-        reviewState: "unreviewed" as const,
-      }),
+      ...storedImageFields(args.storedImage, image, duplicate, createdAt, gps, gpsCheck, exifDatetime),
       duplicateEvidence: Boolean(duplicate.of),
       visionAnalysis: clip(vision?.summary, 2000),
       authenticityClassification: vision?.authenticity?.classification,
@@ -243,8 +311,8 @@ export const insertClustered = internalMutation({
       visualMatch: vision?.visualComparison?.match,
       visualMatchConfidence: vision?.visualComparison ? unit(vision.visualComparison.confidence) : undefined,
       visualMatchReason: clip(vision?.visualComparison?.reason, 1000),
-      semanticSimilarity: unit(semanticSimilarity),
-      embedding,
+      semanticSimilarity: unit(candidate.semanticSimilarity),
+      embedding: normalized.embedding,
       createdAt,
     });
 

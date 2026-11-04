@@ -98,16 +98,25 @@ export default function ReporterFlow({ onSubmitted }) {
     } finally { setBusy(false); setProgress(''); }
   };
 
+  const stepClass = (index) => {
+    if (step === index + 1) return 'active';
+    return step > index + 1 ? 'complete' : '';
+  };
+  const continueButton = <button type="button" className="primary" onClick={next}>Continue <ChevronRight size={16} /></button>;
+  const submitLabel = busy
+    ? <><RefreshCw className="spin" size={16} />{progress || 'Submitting…'}</>
+    : <><BrainCircuit size={16} />Submit report</>;
+  const submitButton = <button type="button" className="primary" disabled={busy} onClick={submit}>{submitLabel}</button>;
   return <section className="panel formPanel reporterFlow">
     <div className="panelHeader"><div><p className="panelEyebrow">Community report</p><h2>Report an incident</h2></div><span className="liveBadge"><span />Live Convex sync</span></div>
-    <ol className="reportSteps" aria-label="Report progress">{['Details', 'What happened', 'Evidence & review'].map((label, index) => <li key={label} className={step === index + 1 ? 'active' : step > index + 1 ? 'complete' : ''}><span>{index + 1}</span>{label}</li>)}</ol>
+    <ol className="reportSteps" aria-label="Report progress">{['Details', 'What happened', 'Evidence & review'].map((label, index) => <li key={label} className={stepClass(index)}><span>{index + 1}</span>{label}</li>)}</ol>
     {error && <div className="reportError" role="alert"><AlertTriangle size={16} />{error}</div>}
     {step === 1 && <div className="reportStep">
       <div className="fieldRow"><label>Category<select value={form.category} onChange={(event) => update('category', event.target.value)}>{CATEGORIES.map((category) => <option key={category}>{category}</option>)}</select></label></div>
       <label>Location<div className="inputWithIcon"><MapPin size={16} /><input value={form.location} onChange={(event) => update('location', event.target.value)} placeholder="Where is this happening?" /></div></label>
       <small className="fieldHint">Reports are anonymous. This browser gets a random reporter ID so repeat reports from it count once.</small>
     </div>}
-    {step === 2 && <div className="reportStep"><label>What happened?<textarea autoFocus value={form.description} onChange={(event) => update('description', event.target.value)} placeholder="Describe what you saw, when it started, and anything that could help someone verify it." /><small className="fieldHint">Avoid names, phone numbers, or other private details.</small></label></div>}
+    {step === 2 && <div className="reportStep"><label>What happened?<textarea value={form.description} onChange={(event) => update('description', event.target.value)} placeholder="Describe what you saw, when it started, and anything that could help someone verify it." /><small className="fieldHint">Avoid names, phone numbers, or other private details.</small></label></div>}
     {step === 3 && <div className="reportStep">
       <div className="cameraActions"><button type="button" className="secondary" onClick={startCamera} disabled={Boolean(stream)}><Camera size={16} />Open camera</button><label className="secondary uploadTrigger"><Upload size={16} />Choose photo<input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={(event) => chooseImage(event.target.files?.[0])} /></label></div>
       {stream && <div className="cameraPreview"><video ref={videoRef} autoPlay playsInline muted /><div><button type="button" className="primary" onClick={capture}><Camera size={16} />Capture photo</button><button type="button" className="secondary" onClick={stopCamera}>Cancel</button></div></div>}
@@ -115,6 +124,6 @@ export default function ReporterFlow({ onSubmitted }) {
       <small className="fieldHint">Location and camera details are removed from photos before they are stored or shown.</small>
       <div className="reportReview"><b>{form.category}</b><span>{form.location}</span><p>{form.description}</p></div>
     </div>}
-    <div className="reportNav"><button type="button" className="secondary" onClick={() => { setError(''); setStep((value) => Math.max(1, value - 1)); }} disabled={step === 1 || busy}>Back</button>{step < 3 ? <button type="button" className="primary" onClick={next}>Continue <ChevronRight size={16} /></button> : <button type="button" className="primary" disabled={busy} onClick={submit}>{busy ? <><RefreshCw className="spin" size={16} />{progress || 'Submitting…'}</> : <><BrainCircuit size={16} />Submit report</>}</button>}</div>
+    <div className="reportNav"><button type="button" className="secondary" onClick={() => { setError(''); setStep((value) => Math.max(1, value - 1)); }} disabled={step === 1 || busy}>Back</button>{step < 3 ? continueButton : submitButton}</div>
   </section>;
 }

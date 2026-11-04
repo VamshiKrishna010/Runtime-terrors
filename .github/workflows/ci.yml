@@ -10,8 +10,6 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: convex-${{ github.workflow }}-${{ github.ref }}
@@ -28,7 +26,7 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - run: npm ci
+      - run: npm ci --ignore-scripts
         working-directory: frontend
       - name: Typecheck Convex functions
         run: npm run typecheck
@@ -51,7 +49,9 @@ jobs:
           python-version: '3.12'
           cache: pip
           cache-dependency-path: backend/requirements*.txt
-      - run: python -m pip install -r requirements-dev.txt
+      - run: >-
+          python -m pip install --only-binary :all: --require-hashes
+          -r requirements-lock.txt
         working-directory: backend
       - run: python -m unittest discover -s tests -v
         working-directory: backend
@@ -68,7 +68,11 @@ jobs:
           cache-dependency-path: |
             ml_service/requirements.txt
             ml_service/requirements-dev.txt
-      - run: python -m pip install --extra-index-url https://download.pytorch.org/whl/cpu -r ml_service/requirements-dev.txt
+            ml_service/requirements-lock.txt
+      - run: >-
+          python -m pip install --only-binary :all: --require-hashes
+          --extra-index-url https://download.pytorch.org/whl/cpu
+          -r ml_service/requirements-lock.txt
       - run: python -m ml_service.validate_seed
       - name: API contracts and shared scoring cases
         run: python -m unittest discover -s ml_service/tests -v
@@ -81,6 +85,10 @@ jobs:
       github.ref == 'refs/heads/dev'
     runs-on: ubuntu-latest
     environment: deployment
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -88,10 +96,10 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - run: npm ci
+      - run: npm ci --ignore-scripts
         working-directory: frontend
       - name: Deploy Convex production and build the frontend
-        run: npx convex deploy --cmd "npm run build"
+        run: ./node_modules/.bin/convex deploy --cmd "npm run build"
         working-directory: frontend
         env:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
