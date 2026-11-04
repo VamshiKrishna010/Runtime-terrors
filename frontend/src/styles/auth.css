@@ -1,12 +1,12 @@
-/* Explicit local demo sign-in */
+/* Browser-scoped workspace access */
 .authPage { display: grid; place-items: center; min-height: 100vh; padding: 24px; background: #f5f7fb; }
 .authCard { width: min(100%,420px); padding: 30px; background: var(--panel); border: 1px solid var(--border); border-radius: 18px; box-shadow: var(--shadow); }
 .authLogo { display: inline-grid; place-items: center; padding: 12px; border-radius: 12px; color: var(--primary); background: var(--primary-soft); }
 .authCard h1 { margin: 14px 0 4px; font-size: 28px; }
 .authCard h2 { margin: 24px 0 14px; font-size: 19px; }
 .authCard p { color: var(--muted); font-size: 13px; line-height: 1.6; }
-.authDemoNotice { padding: 12px; background: var(--primary-soft); border-radius: 10px; font-size: 13px; }
-.authDemoNotice p { margin: 6px 0 0; }
+.authSessionNotice { padding: 12px; background: var(--primary-soft); border-radius: 10px; font-size: 13px; }
+.authSessionNotice p { margin: 6px 0 0; }
 .authCard form { display: grid; gap: 12px; margin-top: 20px; }
 .authCard label { font-size: 13px; font-weight: 600; }
 .authCard input { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel); color: var(--text); }

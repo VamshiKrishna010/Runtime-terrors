@@ -122,12 +122,12 @@ export default function HeaderControls({ refresh, loading, refreshLabel = 'incid
             setOpen(open === 'profile' ? null : 'profile');
           }}>
           <span className="avatar">{user.initials}</span>
-          <span><b>{user.name}</b><small>{user.event} / Demo</small></span>
+          <span><b>{user.name}</b><small>{user.event} / Live</small></span>
         </button>
         {open === 'profile' && (
           <section id="header-profile" className="headerPopover" ref={panelRef}
             tabIndex={-1} aria-label="Team profile">
-            <p>Account: {user.email}</p><p>Demo session</p>
+            <p>Account: {user.email}</p><p>Browser session</p>
             <p>Team: <b>{user.team}</b></p>
             <p>Event: <b>HackUMBC</b></p>
             {role && <p>UI role: {role}</p>}

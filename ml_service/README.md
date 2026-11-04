@@ -171,7 +171,7 @@ Descriptions include building aliases, while the location field stays canonical.
 
 For chronological replay, sort by `(reported_at, id)`; file order groups examples
 by expected cluster. Fixed historical dates work for offline evaluation. A live
-demo seeder must shift all timestamps by the same offset to preserve intervals.
+fixture replay must shift all timestamps by the same offset to preserve intervals.
 Preetham owns that database replay script; this file is the labeled ML fixture.
 
 ## Known limitations
