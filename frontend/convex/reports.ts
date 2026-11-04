@@ -182,7 +182,8 @@ async function duplicateFor(ctx: MutationCtx, storedImage?: StoredImage, measure
     }
   }
   const values = [...matches.values()];
-  const earliest = values.sort((a, b) => a.report.createdAt - b.report.createdAt)[0];
+  values.sort((a, b) => a.report.createdAt - b.report.createdAt);
+  const earliest = values[0];
   return {
     of: earliest?.report._id,
     distance: earliest ? Math.min(...values.map((match) => match.distance)) : undefined,
@@ -286,7 +287,7 @@ export const insertClustered = internalMutation({
     await enforceReportLimit(ctx, normalized.reporterToken, createdAt);
     const candidate = await bestCluster(ctx, args, normalized, createdAt);
     const { incidentId, clustered } = await resolveIncident(ctx, args, normalized, createdAt, candidate.incidentId);
-    const image = args.storedImage ? { ...(args.image ?? {}) } : undefined;
+    const image = args.storedImage ? args.image : undefined;
     const duplicate = await duplicateFor(ctx, args.storedImage, image);
     const gps = validGps(image);
     const gpsCheck = gpsConsistency(args, gps);

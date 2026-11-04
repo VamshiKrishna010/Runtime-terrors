@@ -77,8 +77,8 @@ def api_key() -> Optional[str]:
     return os.getenv("GROQ_API_KEY") or os.getenv("GROQ_QWEN_API_KEY") or None
 
 
-def parse_model_output(text: str) -> VisionResult:
-    """Validate each part independently so one bad field does not discard the rest."""
+def json_candidate(text: str) -> str:
+    """Remove an optional Markdown fence and isolate the outer JSON object."""
     cleaned = (text or "").strip()
     if cleaned.startswith("```"):
         first_line, separator, remainder = cleaned.partition("\n")
@@ -88,26 +88,31 @@ def parse_model_output(text: str) -> VisionResult:
         cleaned = cleaned.rstrip()[:-3].rstrip()
     start = cleaned.find("{")
     end = cleaned.rfind("}")
-    candidate = cleaned[start:end + 1] if 0 <= start <= end else cleaned
+    return cleaned[start:end + 1] if 0 <= start <= end else cleaned
+
+
+def validated_part(model, value):
     try:
-        data = json.loads(candidate)
+        return model.model_validate(value) if isinstance(value, dict) else None
+    except (ValidationError, ValueError, TypeError):
+        return None
+
+
+def parse_model_output(text: str) -> VisionResult:
+    """Validate each part independently so one bad field does not discard the rest."""
+    try:
+        data = json.loads(json_candidate(text))
     except (json.JSONDecodeError, TypeError):
         return unavailable("The vision model did not return valid JSON.")
     if not isinstance(data, dict):
         return unavailable("The vision model did not return a JSON object.")
 
-    def part(model, value):
-        try:
-            return model.model_validate(value) if isinstance(value, dict) else None
-        except (ValidationError, ValueError, TypeError):
-            return None
-
     summary = data.get("summary")
     result = VisionResult(
         status="ok",
         summary=summary.strip()[:2000] if isinstance(summary, str) and summary.strip() else None,
-        authenticity=part(Authenticity, data.get("authenticity")),
-        visualComparison=part(VisualComparison, data.get("visualComparison") or data.get("visual_comparison")),
+        authenticity=validated_part(Authenticity, data.get("authenticity")),
+        visualComparison=validated_part(VisualComparison, data.get("visualComparison") or data.get("visual_comparison")),
     )
     if not (result.summary or result.authenticity or result.visualComparison):
         return unavailable("The vision model returned no usable fields.")
