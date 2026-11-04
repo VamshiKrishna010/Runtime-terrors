@@ -2,19 +2,19 @@ import assert from 'node:assert/strict';
 import { createServer } from 'vite';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { createDemoSession, readDemoSession, SESSION_KEY } from '../src/demoSession.js';
+import { createBrowserSession, readBrowserSession, SESSION_KEY } from '../src/browserSession.js';
 
 const values = new Map();
 const storage = { getItem: (key) => values.get(key), setItem: (key, value) => values.set(key, value), removeItem: (key) => values.delete(key) };
-assert.equal(readDemoSession(storage), null);
-storage.setItem(SESSION_KEY, JSON.stringify(createDemoSession(100)));
-assert.equal(readDemoSession(storage, 101).mode, 'demo');
-assert.equal(readDemoSession(storage, 100 + 8 * 60 * 60 * 1000), null);
+assert.equal(readBrowserSession(storage), null);
+storage.setItem(SESSION_KEY, JSON.stringify(createBrowserSession(100)));
+assert.equal(readBrowserSession(storage, 101).mode, 'browser');
+assert.equal(readBrowserSession(storage, 100 + 8 * 60 * 60 * 1000), null);
 storage.removeItem(SESSION_KEY);
-assert.equal(readDemoSession(storage), null);
+assert.equal(readBrowserSession(storage), null);
 storage.setItem(SESSION_KEY, '{broken');
-assert.equal(readDemoSession(storage), null);
-assert.equal(readDemoSession({ getItem() { throw Error('blocked'); } }), null);
+assert.equal(readBrowserSession(storage), null);
+assert.equal(readBrowserSession({ getItem() { throw Error('blocked'); } }), null);
 
 const server = await createServer({ server: { middlewareMode: true }, ssr: { external: ['react', 'react-dom', 'lucide-react', 'recharts', 'convex', 'convex/react'] } });
 try {
@@ -43,8 +43,8 @@ try {
   assert.ok(notes[0].message.includes('Strong (70/100, 3 reports)'));
   assert.ok(notes[1].message.startsWith('New incident reported at ITE'));
   const login = renderToStaticMarkup(React.createElement(LoginScreen, { onSignIn() {}, busy: false, error: '' }));
-  assert.ok(login.includes('Hackathon demo mode'));
-  assert.ok(login.includes('demo@veripulse.local'));
+  assert.ok(login.includes('Browser access'));
+  assert.ok(login.includes('app@veripulse.local'));
   assert.ok(!login.includes('type="password"'));
-  console.log('PASS: demo session persistence/expiry/logout, login markup, analytics partial/empty/error/loading states filter serialization and live notifications.');
+  console.log('PASS: browser session persistence/expiry/logout, login markup, analytics partial/empty/error/loading states filter serialization and live notifications.');
 } finally { await server.close(); }

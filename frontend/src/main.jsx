@@ -1043,23 +1043,6 @@ function App() {
 
         <div className="sidebarSpacer" />
 
-        <div className="tip">
-          <div className="tipIcon">
-            <BrainCircuit
-              size={18}
-            />
-          </div>
-
-          <div>
-            <b>Judge demo</b>
-
-            <span>
-              Submit similar reports from
-              different users and watch the
-              evidence score update.
-            </span>
-          </div>
-        </div>
       </aside>
 
       <main>

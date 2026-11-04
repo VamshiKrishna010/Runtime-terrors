@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { ShieldCheck, RefreshCw } from 'lucide-react';
-import { createDemoSession, readDemoSession, SESSION_KEY, DEMO_ACCOUNT } from './demoSession';
+import { APP_ACCOUNT, createBrowserSession, readBrowserSession, SESSION_KEY } from './browserSession';
 
 const AuthContext = createContext(null);
 export const useAuth = () => useContext(AuthContext);
@@ -9,12 +9,12 @@ export function LoginScreen({ onSignIn, busy, error }) {
     <div className="authLogo"><ShieldCheck size={30} aria-hidden="true" /></div>
     <h1 id="login-title">VeriPulse</h1><p>Campus Incident Intelligence</p>
     <h2>Sign in to continue</h2>
-    <div className="authDemoNotice"><b>Hackathon demo mode</b><p>This is a local demo session, not secure account authentication. No password is required.</p></div>
+    <div className="authSessionNotice"><b>Browser access</b><p>Access is stored only in this browser tab. No password or personal account data is collected.</p></div>
     <form onSubmit={(event) => { event.preventDefault(); onSignIn(); }}>
-      <label htmlFor="demo-email">Demo account email</label><input id="demo-email" type="email" value={DEMO_ACCOUNT.email} readOnly autoComplete="off" />
+      <label htmlFor="workspace-email">Workspace account</label><input id="workspace-email" type="email" value={APP_ACCOUNT.email} readOnly autoComplete="off" />
       {error && <p className="apiError" role="alert">{error}</p>}
-      <button type="submit" disabled={busy}>{busy && <RefreshCw size={16} className="spin" aria-hidden="true" />}{busy ? 'Starting session...' : 'Continue as Demo User'}</button>
-    </form><p className="authHint">The demo session lasts up to 8 hours in this tab. Convex and FastAPI remain separate data services.</p>
+      <button type="submit" disabled={busy}>{busy && <RefreshCw size={16} className="spin" aria-hidden="true" />}{busy ? 'Starting session...' : 'Continue to VeriPulse'}</button>
+    </form><p className="authHint">The browser session lasts up to 8 hours in this tab. Convex and FastAPI remain separate data services.</p>
   </section></main>;
 }
 
@@ -38,7 +38,7 @@ export default function AuthGate({ children }) {
   const pending = useRef(false);
   useEffect(() => {
     let saved = null;
-    try { saved = readDemoSession(window.sessionStorage); } catch { /* Storage may be blocked. */ }
+    try { saved = readBrowserSession(window.sessionStorage); } catch { /* Storage may be blocked. */ }
     setSession(saved); setStatus(saved ? 'authenticated' : 'unauthenticated');
   }, []);
   const signOut = () => {
@@ -54,13 +54,13 @@ export default function AuthGate({ children }) {
     if (pending.current) return;
     pending.current = true; setBusy(true); setError('');
     try {
-      const saved = createDemoSession();
+      const saved = createBrowserSession();
       window.sessionStorage.setItem(SESSION_KEY, JSON.stringify(saved));
       setSession(saved); setStatus('authenticated');
     } catch { setError('Browser session storage is unavailable. Enable site storage and try again.'); }
     finally { pending.current = false; setBusy(false); }
   };
-  if (status === 'loading') return <main className="authPage"><p role="status">Checking demo session...</p></main>;
+  if (status === 'loading') return <main className="authPage"><p role="status">Checking browser session...</p></main>;
   if (status === 'unauthenticated') return <LoginScreen onSignIn={signIn} busy={busy} error={error} />;
-  return <AuthContext.Provider value={{ status, user: DEMO_ACCOUNT, signOut }}><DataBoundary onSignOut={signOut}>{children}</DataBoundary></AuthContext.Provider>;
+  return <AuthContext.Provider value={{ status, user: APP_ACCOUNT, signOut }}><DataBoundary onSignOut={signOut}>{children}</DataBoundary></AuthContext.Provider>;
 }

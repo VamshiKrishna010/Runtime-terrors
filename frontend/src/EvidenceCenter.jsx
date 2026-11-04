@@ -140,7 +140,7 @@ export default function EvidenceCenter() {
     <header className="pageHeader"><div><p className="eyebrow">Evidence Intelligence</p><h1>Evidence Center</h1>
       <p>Inspect uploaded evidence, metadata, provenance, consistency, and reuse signals.</p></div>
       <span className="evidenceAnalysisBadge"><BrainCircuit size={16} aria-hidden="true" />Evidence analysis</span></header>
-    <div className="evidenceDemoNotice"><ShieldCheck size={18} aria-hidden="true" /><span>Uploaded evidence and measured file signals support human review; they do not prove truth. Photos are stored with location and camera metadata removed.</span></div>
+    <div className="evidenceReviewNotice"><ShieldCheck size={18} aria-hidden="true" /><span>Uploaded evidence and measured file signals support human review; they do not prove truth. Photos are stored with location and camera metadata removed.</span></div>
     <div className="stats">
       <EvidenceSummaryCard title="Total Evidence" value={evidence.length} icon={Image} tone="info" subtitle="Stored report attachments" />
       <EvidenceSummaryCard title="Unique Images" value={evidence.filter((item) => item.type !== 'Video' && !item.duplicateOf).length} icon={ShieldCheck} tone="success" subtitle="Distinct images and screenshots" />

@@ -2,13 +2,13 @@
 
 The current project stores all data in Convex and uses an optional FastAPI vision service,
 but no authentication provider, user table, credential endpoint, or session verifier.
-The login screen therefore implements the explicitly labeled hackathon demo option,
-not a second production authentication system. It never requests or stores a password.
+The login screen therefore implements temporary browser-scoped access rather than a
+second authentication system. It never requests or stores a password.
 
-Continue as Demo User starts an eight-hour sessionStorage marker in this browser tab.
+Continue to VeriPulse starts an eight-hour sessionStorage marker in this browser tab.
 Reloading preserves it; expiry or Sign Out clears the session and unmounts the app,
 returning to login. The marker is not an auth token and grants no backend protection.
-Identity is the fixed demo@veripulse.local account. Storage errors appear in the login
+Identity is the fixed app@veripulse.local account. Storage errors appear in the login
 card; service errors are separate workspace/Analytics errors. Real email/password
 login, account creation and identity verification are not supported or advertised.
 Convex functions have no per-user access control; this gate does not add any.
@@ -30,5 +30,5 @@ proxy defaults to 127.0.0.1:8000 locally or backend:8000 inside Docker. Override
 BACKEND_PROXY_TARGET if necessary. No .env values are printed or committed.
 
 Checks from frontend/: npm test; npm run build.
-Manual flow: open the app, Continue as Demo User, select all four sidebar views,
+Manual flow: open the app, Continue to VeriPulse, select all four sidebar views,
 refresh, open profile, Sign out, then sign in again. Live browser checks require an available browser session.

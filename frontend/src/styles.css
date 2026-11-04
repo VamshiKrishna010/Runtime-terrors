@@ -187,55 +187,6 @@ button {
   flex: 1;
 }
 
-/* JUDGE DEMO */
-
-.tip {
-  display: grid;
-  grid-template-columns: auto 1fr;
-
-  gap: 10px;
-
-  background: rgba(255, 255, 255, 0.07);
-
-  border:
-    1px solid
-    rgba(255, 255, 255, 0.08);
-
-  padding: 14px;
-
-  border-radius: 14px;
-}
-
-.tipIcon {
-  width: 34px;
-  height: 34px;
-
-  border-radius: 10px;
-
-  display: grid;
-  place-items: center;
-
-  background:
-    rgba(100, 170, 255, 0.18);
-
-  color: #87b9ff;
-}
-
-.tip b {
-  display: block;
-  font-size: 13px;
-  margin-bottom: 4px;
-}
-
-.tip span {
-  display: block;
-
-  font-size: 11px;
-  line-height: 1.5;
-
-  color: #bcd0df;
-}
-
 /* MAIN */
 
 main {
