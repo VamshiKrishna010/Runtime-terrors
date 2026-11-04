@@ -1,12 +1,12 @@
 name: CI and Convex delivery
 
-# The only workflow: every PR and every push to a long-lived branch runs the
-# three test jobs once; deploy jobs run only after all three pass.
+# The only workflow: every PR is validated, and every push to dev is validated
+# before deploying the production Convex backend and GitHub Pages frontend.
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review, closed]
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
-    branches: [pre-dev, dev]
+    branches: [dev]
 
 permissions:
   contents: read
@@ -20,8 +20,6 @@ concurrency:
 jobs:
   frontend-ci:
     name: Frontend CI
-    # A closed PR only needs the deploy job; its commits were already tested.
-    if: github.event.action != 'closed' || github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -45,7 +43,6 @@ jobs:
 
   backend-ci:
     name: Backend CI
-    if: github.event.action != 'closed' || github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -61,7 +58,6 @@ jobs:
 
   ml-ci:
     name: ML CI
-    if: github.event.action != 'closed' || github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -77,43 +73,16 @@ jobs:
       - name: API contracts and shared scoring cases
         run: python -m unittest discover -s ml_service/tests -v
 
-  deploy-development:
-    name: Deploy Convex development
-    needs: [frontend-ci, backend-ci, ml-ci]
-    if: >-
-      github.event_name == 'push' &&
-      github.ref == 'refs/heads/pre-dev'
-    runs-on: ubuntu-latest
-    environment: convex-deployment
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - run: npm ci
-        working-directory: frontend
-      - name: Deploy functions to Convex development
-        run: npx convex deploy
-        working-directory: frontend
-        env:
-          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
-
   deploy-production:
     name: Deploy Convex production
     needs: [frontend-ci, backend-ci, ml-ci]
     if: >-
-      github.event_name == 'pull_request' &&
-      github.event.action == 'closed' &&
-      github.event.pull_request.merged == true &&
-      github.event.pull_request.base.ref == 'dev'
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/dev'
     runs-on: ubuntu-latest
-    environment: convex-production
+    environment: deployment
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.merge_commit_sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22

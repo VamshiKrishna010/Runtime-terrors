@@ -106,20 +106,19 @@ cd backend && python -m unittest discover -s tests -v
 python -m ml_service.validate_seed && python -m unittest discover -s ml_service/tests -v
 ```
 
-`.github/workflows/ci.yml` runs these once per PR and per push to `pre-dev` or
-`dev` (no duplicate workflows), then deploys according to the branch contract.
+`.github/workflows/ci.yml` validates every PR without deploying. A push to
+`dev` runs the checks again, then deploys production.
 
 ## Convex delivery and GitHub Pages
 
-Never commit deploy keys. Create two GitHub **Environments** under
-`Settings → Environments`, each with a secret named `CONVEX_DEPLOY_KEY`:
+Never commit deploy keys. The GitHub **Environment** named `deployment` must
+contain the production Convex deploy key as `CONVEX_DEPLOY_KEY`:
 
 | GitHub environment | Convex deploy key target | Used when |
 | --- | --- | --- |
-| `convex-deployment` | The shared development deployment | A push to `pre-dev` |
-| `convex-production` | The production deployment | A merged PR into `dev` |
+| `deployment` | The production deployment | A push or merged PR into `dev` |
 
-Create each key in the Convex deployment's **Settings → Deploy keys** with the
+Create the key in the Convex deployment's **Settings → Deploy keys** with the
 `deployment:deploy` permission.
 
 The production job also publishes the frontend to
