@@ -16,9 +16,9 @@ storage.setItem(SESSION_KEY, '{broken');
 assert.equal(readDemoSession(storage), null);
 assert.equal(readDemoSession({ getItem() { throw Error('blocked'); } }), null);
 
-const server = await createServer({ server: { middlewareMode: true }, ssr: { external: ['react', 'react-dom', 'lucide-react', 'recharts'] } });
+const server = await createServer({ server: { middlewareMode: true }, ssr: { external: ['react', 'react-dom', 'lucide-react', 'recharts', 'convex', 'convex/react'] } });
 try {
-  const { normalizeAnalytics, AnalyticsContent, AnalyticsError, AnalyticsLoading, analyticsQuery } = await server.ssrLoadModule('/src/Analytics.jsx');
+  const { normalizeAnalytics, AnalyticsContent, AnalyticsError, AnalyticsLoading, analyticsArgs } = await server.ssrLoadModule('/src/Analytics.jsx');
   const { LoginScreen } = await server.ssrLoadModule('/src/AuthGate.jsx');
   for (const value of [null, [], {}, { total_incidents: 1 }]) assert.throws(() => normalizeAnalytics(value));
   const empty = normalizeAnalytics({ summary: { active_incidents: 0 } });
@@ -31,10 +31,20 @@ try {
   assert.ok(!populated.includes('NaN'));
   assert.ok(renderToStaticMarkup(React.createElement(AnalyticsError, { retry() {} })).includes('Analytics unavailable'));
   assert.ok(renderToStaticMarkup(React.createElement(AnalyticsLoading)).includes('Loading analytics'));
-  assert.ok(analyticsQuery({ range: '7d', location: 'The Commons', category: '' }).includes('location=The+Commons'));
+  assert.deepEqual(analyticsArgs({ range: '7d', location: 'The Commons', category: '', evidence_level: 'Strong' }), { range: '7d', location: 'The Commons', evidenceLevel: 'Strong' });
+  const { incidentNotifications } = await server.ssrLoadModule('/src/HeaderControls.jsx');
+  const now = Date.parse('2026-09-27T12:00:00Z');
+  const notes = incidentNotifications([
+    { _id: 'a', title: 'Old', location: 'ITE', createdAt: now - 3 * 86400000, reportCount: 1, confirmations: 0, contradictions: 0 },
+    { _id: 'b', title: 'Wi-Fi down', location: 'ITE', createdAt: now - 1000, reportCount: 1, confirmations: 0, contradictions: 0 },
+    { _id: 'c', title: 'Leak', location: 'Library', createdAt: now - 5000, updatedAt: now - 10, reportCount: 3, confirmations: 2, contradictions: 0, evidenceLevel: 'Strong', supportScore: 70 },
+  ], now);
+  assert.deepEqual(notes.map((note) => note.id), ['c', 'b'], 'recent real incidents only, newest first');
+  assert.ok(notes[0].message.includes('Strong (70/100, 3 reports)'));
+  assert.ok(notes[1].message.startsWith('New incident reported at ITE'));
   const login = renderToStaticMarkup(React.createElement(LoginScreen, { onSignIn() {}, busy: false, error: '' }));
   assert.ok(login.includes('Hackathon demo mode'));
   assert.ok(login.includes('demo@veripulse.local'));
   assert.ok(!login.includes('type="password"'));
-  console.log('PASS: demo session persistence/expiry/logout, login markup, analytics partial/empty/error/loading states and filter serialization.');
+  console.log('PASS: demo session persistence/expiry/logout, login markup, analytics partial/empty/error/loading states filter serialization and live notifications.');
 } finally { await server.close(); }

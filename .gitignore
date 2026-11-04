@@ -29,6 +29,8 @@ eggs/
 .eggs/
 lib/
 lib64/
+!frontend/convex/lib/
+!frontend/convex/lib/**
 parts/
 sdist/
 var/
@@ -167,3 +169,8 @@ node_modules/
 # User uploads and additive-migration backups
 backend/uploads/
 *.migration-*.bak
+
+# Large media: publish demo videos as a GitHub Release asset or on YouTube.
+*.mp4
+*.mov
+*.webm

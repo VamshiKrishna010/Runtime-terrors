@@ -9,6 +9,8 @@ from fastapi.testclient import TestClient
 from ml_service.main import app
 from ml_service.validate_seed import SEED_PATH, validate_seed
 
+SCORING_CASES = Path(__file__).resolve().parents[2] / "shared" / "scoring_cases.json"
+
 
 class SetupTests(unittest.TestCase):
     def setUp(self):
@@ -37,15 +39,27 @@ class SetupTests(unittest.TestCase):
             "semantic_agreement": 0.8,
             "confirmations": 1,
             "time_proximity": 1,
-            "location_consistency": 1,
         })
         self.assertEqual(response.status_code, 200)
         body = response.json()
-        self.assertEqual(body["support_score"], 71)
-        self.assertEqual(body["evidence_level"], "Strong")
+        self.assertEqual(body["support_score"], 63)
+        self.assertEqual(body["evidence_level"], "Emerging")
         self.assertTrue(any("Semantic agreement 80%" in reason for reason in body["reasons"]))
 
-    def test_invalid_inputs_are_rejected_before_pending_response(self):
+    def test_score_matches_the_canonical_convex_scorer(self):
+        # shared/scoring_cases.json is also checked against
+        # frontend/convex/lib/scoring.ts by `npm test`.
+        for case in json.loads(SCORING_CASES.read_text())["cases"]:
+            with self.subTest(case=case["name"]):
+                response = self.client.post("/score", json=case["input"])
+                self.assertEqual(response.status_code, 200, response.text)
+                self.assertEqual(response.json(), case["expected"])
+
+    def test_location_consistency_is_no_longer_an_input(self):
+        response = self.client.post("/score", json={"distinct_reporters": 1, "semantic_agreement": 0, "location_consistency": 1})
+        self.assertEqual(response.status_code, 422)
+
+    def test_invalid_inputs_are_rejected(self):
         cases = [
             ("embed", {"texts": []}),
             ("embed", {"texts": ["  "]}),

@@ -1,24 +1,36 @@
+# One-command stack: frontend (nginx, production build), vision analysis,
+# MiniLM embeddings and a temporary Cloudflare tunnel.
+# Put CONVEX_URL in the repository-root .env (see .env.example).
 services:
   backend:
     build:
       context: ./backend
     env_file:
       - ./backend/.env
+    environment:
+      TRUST_PROXY_HEADERS: "1"
     ports:
       - "8000:8000"
+
+  ml:
+    build:
+      context: ./ml_service
+    ports:
+      - "8001:8001"
 
   frontend:
     build:
       context: ./frontend
-    env_file:
-      - ./frontend/.env
+      args:
+        CONVEX_URL: ${CONVEX_URL:?Set CONVEX_URL in the repository-root .env}
     depends_on:
       - backend
+      - ml
     ports:
-      - "5173:5173"
+      - "5173:80"
 
   tunnel:
-    image: cloudflare/cloudflared:latest
-    command: tunnel --no-autoupdate --url http://frontend:5173
+    image: cloudflare/cloudflared:2024.12.2
+    command: tunnel --no-autoupdate --url http://frontend:80
     depends_on:
       - frontend

@@ -1,5 +1,9 @@
 import { mutation, query } from "./_generated/server";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
+import { rescoreIncident } from "./lib/rescore";
+
+const TOKEN_PATTERN = /^[A-Za-z0-9-]{16,64}$/;
+const VOTES_PER_TOKEN_MINUTE = 20;
 
 export const list = query({
   args: {},
@@ -9,149 +13,75 @@ export const list = query({
       .withIndex("by_created_at")
       .order("desc")
       .collect();
-
-    return await Promise.all(
-      incidents.map(async (incident) => ({
-        ...incident,
-        reportCount: (
-          await ctx.db
-            .query("reports")
-            .withIndex("by_incident", (q) => q.eq("incidentId", incident._id))
-            .collect()
-        ).length,
-      }))
-    );
+    // reportCount is maintained by rescoreIncident; no per-incident queries.
+    return incidents.map(({ sqliteIncidentId: _legacy, ...incident }) => ({
+      ...incident,
+      reportCount: incident.reportCount ?? 0,
+    }));
   },
 });
 
 export const get = query({
-  args: {
-    id: v.id("incidents"),
-  },
-  handler: async (ctx, args) => {
-    return await ctx.db.get(args.id);
-  },
+  args: { id: v.id("incidents") },
+  handler: async (ctx, args) => await ctx.db.get(args.id),
 });
 
-export const create = mutation({
-  args: {
-    title: v.string(),
-    category: v.string(),
-    location: v.string(),
-    latitude: v.optional(v.number()),
-    longitude: v.optional(v.number()),
-  },
-
-  handler: async (ctx, args) => {
-    const incidentId = await ctx.db.insert("incidents", {
-      title: args.title,
-      category: args.category,
-      location: args.location,
-      latitude: args.latitude,
-      longitude: args.longitude,
-
-      supportScore: 0,
-      evidenceLevel: "Low",
-      confirmations: 0,
-      contradictions: 0,
-
-      createdAt: Date.now(),
-    });
-
-    return incidentId;
-  },
-});
-
+/**
+ * One current vote per device token per incident. Repeating the same vote is a
+ * no-op, switching reverses the earlier one, and the incident is rescored
+ * immediately.
+ */
 export const vote = mutation({
   args: {
     id: v.id("incidents"),
     type: v.union(v.literal("confirm"), v.literal("contradict")),
+    voterToken: v.string(),
   },
   handler: async (ctx, args) => {
+    const voterToken = args.voterToken.trim();
+    if (!TOKEN_PATTERN.test(voterToken)) throw new ConvexError("Invalid voter token. Reload the page and try again.");
     const incident = await ctx.db.get(args.id);
-    if (!incident) throw new Error("Incident not found");
+    if (!incident) throw new ConvexError("Incident not found");
 
-    await ctx.db.patch(args.id, {
-      confirmations:
-        incident.confirmations + (args.type === "confirm" ? 1 : 0),
-      contradictions:
-        incident.contradictions + (args.type === "contradict" ? 1 : 0),
-    });
-  },
-});
+    const now = Date.now();
+    const recent = await ctx.db
+      .query("votes")
+      .withIndex("by_voter", (q) => q.eq("voterToken", voterToken).gt("updatedAt", now - 60_000))
+      .take(VOTES_PER_TOKEN_MINUTE);
+    if (recent.length >= VOTES_PER_TOKEN_MINUTE) throw new ConvexError("Too many votes from this device. Please wait a minute.");
 
-export const applyScore = mutation({
-  args: {
-    id: v.id("incidents"),
-    supportScore: v.number(),
-    evidenceLevel: v.union(v.literal("Low"), v.literal("Emerging"), v.literal("Strong")),
-    reasons: v.array(v.string()),
-  },
-  handler: async (ctx, args) => {
-    if (args.supportScore < 0 || args.supportScore > 100) {
-      throw new Error("Support score must be between 0 and 100");
-    }
-    await ctx.db.patch(args.id, {
-      supportScore: Math.round(args.supportScore),
-      evidenceLevel: args.evidenceLevel,
-      reasons: args.reasons,
-      updatedAt: Date.now(),
-    });
-  },
-});
-
-export const upsertFromBackend = mutation({
-  args: {
-    sqliteIncidentId: v.number(),
-    title: v.string(),
-    category: v.string(),
-    location: v.string(),
-
-    latitude: v.optional(v.number()),
-    longitude: v.optional(v.number()),
-
-    supportScore: v.number(),
-    evidenceLevel: v.string(),
-    confirmations: v.number(),
-    contradictions: v.number(),
-  },
-
-  handler: async (ctx, args) => {
-    const existing = await ctx.db
-      .query("incidents")
-      .withIndex("by_sqlite_id", (q) =>
-        q.eq("sqliteIncidentId", args.sqliteIncidentId)
-      )
+    const previous = await ctx.db
+      .query("votes")
+      .withIndex("by_incident_voter", (q) => q.eq("incidentId", args.id).eq("voterToken", voterToken))
       .unique();
+    if (previous?.action === args.type) return { changed: false };
 
-    if (existing) {
-      await ctx.db.patch(existing._id, {
-        title: args.title,
-        category: args.category,
-        location: args.location,
-        latitude: args.latitude,
-        longitude: args.longitude,
-        supportScore: args.supportScore,
-        evidenceLevel: args.evidenceLevel,
-        confirmations: args.confirmations,
-        contradictions: args.contradictions,
-      });
-
-      return existing._id;
+    let { confirmations, contradictions } = incident;
+    if (previous) {
+      if (previous.action === "confirm") confirmations = Math.max(0, confirmations - 1);
+      else contradictions = Math.max(0, contradictions - 1);
+      await ctx.db.patch(previous._id, { action: args.type, updatedAt: now });
+    } else {
+      await ctx.db.insert("votes", { incidentId: args.id, voterToken, action: args.type, createdAt: now, updatedAt: now });
     }
+    if (args.type === "confirm") confirmations += 1;
+    else contradictions += 1;
 
-    return await ctx.db.insert("incidents", {
-      sqliteIncidentId: args.sqliteIncidentId,
-      title: args.title,
-      category: args.category,
-      location: args.location,
-      latitude: args.latitude,
-      longitude: args.longitude,
-      supportScore: args.supportScore,
-      evidenceLevel: args.evidenceLevel,
-      confirmations: args.confirmations,
-      contradictions: args.contradictions,
-      createdAt: Date.now(),
-    });
+    await ctx.db.patch(args.id, { confirmations, contradictions });
+    await rescoreIncident(ctx, args.id);
+    return { changed: true };
+  },
+});
+
+/** The current device's votes, so the UI can show which button is active. */
+export const myVotes = query({
+  args: { voterToken: v.string() },
+  handler: async (ctx, args) => {
+    if (!TOKEN_PATTERN.test(args.voterToken)) return {};
+    const votes = await ctx.db
+      .query("votes")
+      .withIndex("by_voter", (q) => q.eq("voterToken", args.voterToken))
+      .collect();
+    return Object.fromEntries(votes.map((vote) => [vote.incidentId, vote.action]));
   },
 });

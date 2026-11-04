@@ -1,4 +1,4 @@
-"""Proposed JSON contracts for Convex actions calling the ML service."""
+"""JSON contracts for the ML service."""
 
 from typing import Annotated, Literal
 
@@ -36,7 +36,9 @@ class ScoreRequest(Contract):
     unique_images: Count = 0
     duplicate_images: Count = 0
     metadata_conflicts: Count = 0
-    location_consistency: UnitInterval | None = None
+    # Corroborating reports within 30 minutes of the newest one: 0 for a lone
+    # report, 0.5 for one other, 1 for two or more. Location consistency is
+    # deliberately absent: clustering already requires the same location.
     time_proximity: UnitInterval | None = None
     visual_match: Literal["yes", "partial", "no", "unavailable"] = "unavailable"
 
@@ -45,13 +47,3 @@ class ScoreResponse(Contract):
     support_score: float = Field(ge=0, le=100)
     evidence_level: Literal["Low", "Emerging", "Strong"]
     reasons: list[str]
-
-
-class PendingDetail(Contract):
-    code: Literal["not_implemented"] = "not_implemented"
-    capability: Literal["embed", "score"]
-    message: str
-
-
-class PendingResponse(Contract):
-    detail: PendingDetail

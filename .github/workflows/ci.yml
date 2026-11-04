@@ -1,0 +1,107 @@
+name: CI and Convex delivery
+
+# The only workflow: every PR is validated, and every push to dev is validated
+# before deploying the production Convex backend and GitHub Pages frontend.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [dev]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: convex-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  frontend-ci:
+    name: Frontend CI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - name: Typecheck Convex functions
+        run: npm run typecheck
+        working-directory: frontend
+      - name: Unit and render tests (includes shared scoring cases)
+        run: npm test
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend
+        env:
+          CONVEX_URL: https://ci-placeholder.convex.cloud
+
+  backend-ci:
+    name: Backend CI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+      - run: python -m pip install -r requirements-dev.txt
+        working-directory: backend
+      - run: python -m unittest discover -s tests -v
+        working-directory: backend
+
+  ml-ci:
+    name: ML CI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            ml_service/requirements.txt
+            ml_service/requirements-dev.txt
+      - run: python -m pip install --extra-index-url https://download.pytorch.org/whl/cpu -r ml_service/requirements-dev.txt
+      - run: python -m ml_service.validate_seed
+      - name: API contracts and shared scoring cases
+        run: python -m unittest discover -s ml_service/tests -v
+
+  deploy-production:
+    name: Deploy Convex production
+    needs: [frontend-ci, backend-ci, ml-ci]
+    if: >-
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    environment: deployment
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - name: Deploy Convex production and build the frontend
+        run: npx convex deploy --cmd "npm run build"
+        working-directory: frontend
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+          VITE_DEPLOY_TARGET: github-pages
+          # Optional hosted vision service; empty skips vision analysis.
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: frontend/dist
+      - name: Publish frontend to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

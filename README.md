@@ -1,150 +1,155 @@
 # VeriPulse
 
-HackUMBC AI/ML MVP for trust-scored crowdsourced incident reports.
+HackUMBC AI/ML MVP for support-scored crowdsourced campus incident reports.
 
-## Structure
+## Architecture
 
-- `frontend/` - React + Vite application
-- `backend/` - FastAPI + SQLite API
-
-## Run the backend
-
-For a single-command development stack, use Tilt below. Manual startup commands
-are also available here.
-
-```bash
-cd backend
-python -m venv .venv
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
-```
-
-## Run the frontend
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-Open http://localhost:5173.
-
-## Convex delivery through GitHub
-
-The frontend reads the public Convex URL from the repository-level `.env`:
-
-```env
-CONVEX_URL=https://your-development-deployment.convex.cloud
-```
-
-Never commit deploy keys. Create two GitHub **Environments** under
-`Settings → Environments` and add a secret named `CONVEX_DEPLOY_KEY` to each:
-
-| GitHub environment | Convex deploy key target | Used when |
+| Part | Role | Needed for |
 | --- | --- | --- |
-| `convex-deployment` | The shared Convex development deployment | A PR is merged into `pre-dev` or `dev` |
-| `convex-production` | The production Convex deployment | A merged PR from `pre-dev` or `dev` reaches `main` |
+| `frontend/convex/` | **Single source of truth.** Reports, incidents, votes, evidence review, clustering, scoring, analytics | Everything |
+| `frontend/` | React + Vite UI, MiniLM embedding in the browser, EXIF/pHash measurement | Everything |
+| `backend/` | Stateless Groq vision analysis (one call per photo) | Optional: vision signals |
+| `ml_service/` | MiniLM `/embed` and an offline mirror of the scorer | Optional: server-side embeddings, evaluation |
 
-Create each scoped key in the corresponding Convex deployment’s **Settings →
-Deploy keys** page, with the `deployment:deploy` permission. The
-`Convex delivery` workflow runs frontend and backend CI first, then invokes
-`npx convex deploy` with that environment’s key. A direct push to `main` does
-not deploy production; only a merged pull request whose source is `pre-dev` or
-`dev` can do so.
+What happens when someone submits a report:
 
-The same production job publishes the Vite frontend to GitHub Pages at
-`https://vamshikrishna010.github.io/Runtime-terrors/`. In repository
-`Settings → Pages`, choose **GitHub Actions** as the build and deployment
-source before the first production merge.
+1. The browser embeds the description with `all-MiniLM-L6-v2`, either in the
+   browser (transformers.js, the default) or via `ml_service` when
+   `VITE_ML_SERVICE_URL` is set.
+2. If a photo is attached, the browser reads its capture time, camera and GPS
+   with exifr and computes a 64-bit pHash (same construction as Python
+   `imagehash.phash`). It asks `backend/` for vision analysis; if that service
+   is offline, unconfigured or rate-limited, the report still submits.
+3. The photo is uploaded to Convex Storage, and `reports:submit` (a Convex
+   action) **strips EXIF/XMP/IPTC/text metadata from the stored bytes**,
+   deletes the original, and hashes the clean file with SHA-256.
+4. An internal mutation validates everything, clusters the report (same
+   category and location, two-hour window, cosine ≥ 0.32, indexed by time),
+   flags reused images (same SHA-256 or pHash Hamming distance ≤ 6), computes
+   capture-time/GPS consistency, and **rescores the incident server-side**.
+5. Votes go through `incidents:vote`, which keeps one vote per device per
+   incident and rescores immediately.
 
-## Run with Tilt
+No client can write a score: there is no public mutation that sets one.
 
-Install [Tilt](https://docs.tilt.dev/install.html), Node.js with npm, and Python
-3.12 or newer. Ensure `python` is on PATH on Windows, or `python3` on macOS/Linux.
-These Tiltfiles use [local resources](https://docs.tilt.dev/local_resource.html)
-to run the current Vite, FastAPI/SQLite, and ML services. Docker and Kubernetes
-are not required for this setup.
+### Privacy
 
-From the repository root:
+- Reporter and voter identity is a random per-browser token
+  (`src/deviceToken.js`), not a shared default. It is never returned by a
+  public query.
+- Public queries (`reports:byIncident`, `evidence:list`, `analytics:summary`)
+  never return reporter tokens, embeddings or GPS.
+- Raw EXIF GPS is never stored. Convex keeps only whether GPS existed and its
+  distance from the reported pin.
+- Images stored before this change kept their EXIF, so they are withheld from
+  every query. Clean them up once per deployment (below).
+
+### Scoring
+
+`frontend/convex/lib/scoring.ts` is the canonical scorer. `ml_service/scoring.py`
+mirrors it, and both are tested against `shared/scoring_cases.json`. The
+weights are documented in [ml_service/README.md](ml_service/README.md#post-score).
+The score summarises supporting signals; it is not a probability of truth.
+
+## Run locally
+
+Create the repository-root `.env` from `.env.example` and set `CONVEX_URL`.
+For vision analysis, also create `backend/.env` from `backend/.env.example`
+with a `GROQ_API_KEY`.
+
+### Tilt (all services)
+
+Install [Tilt](https://docs.tilt.dev/install.html), Node.js 22 and Python 3.12+.
 
 ```sh
 tilt up
 ```
 
-Tilt installs frontend dependencies with `npm ci`, creates a `.venv` in each
-Python service directory, installs its requirements, and starts all three
-services. Dependency file changes rerun setup and restart the affected service.
-Vite handles frontend source updates; Uvicorn reloads Python source changes.
-
 | Service | Address |
 | --- | --- |
 | Frontend | http://localhost:5173 |
-| Backend API docs | http://localhost:8000/docs |
+| Vision analysis docs | http://localhost:8000/docs |
 | ML service docs | http://localhost:8001/docs |
 | Tilt dashboard | http://localhost:10350 |
 
-The root `Tiltfile` loads `frontend/Tiltfile`, `backend/Tiltfile`, and
-`ml_service/Tiltfile`. To work on one service, run one of these from the root:
+Run one service with `tilt up -f frontend/Tiltfile` (or the `backend`/`ml_service`
+Tiltfile). The frontend alone is enough to submit reports; vision results then
+show as unavailable.
+
+### Manual
 
 ```sh
-tilt up -f frontend/Tiltfile
-tilt up -f backend/Tiltfile
-tilt up -f ml_service/Tiltfile
+cd frontend && npm ci && npm run dev
 ```
 
-You can also run `tilt up` inside any service directory. Each child Tiltfile is
-independent; the frontend alone still needs a running backend for API requests.
-Use one root session for the full stack. If running child sessions concurrently,
-give each Tilt dashboard a different port (for example `--port 10351`), and avoid
-starting the same service twice. Stop manually started servers on ports 5173,
-8000, and 8001 before starting Tilt. Vite uses a strict port so it cannot silently
-move to an origin the backend does not allow.
+The backend and ML service are optional; see their READMEs.
 
-Press Ctrl+C in the Tilt terminal to stop its local processes. Python virtual
-environments, frontend dependencies, uploaded files, and SQLite data remain.
-The ML health check confirms the skeleton is running; embedding and scoring
-capabilities are still pending, as documented in [ML setup](ml_service/README.md).
-
-To check startup and exit once all services pass their health probes:
+### Docker Compose
 
 ```sh
-tilt ci --timeout 5m
+cp .env.example .env             # set CONVEX_URL
+cp backend/.env.example backend/.env   # set GROQ_API_KEY
+docker compose up --build
 ```
 
-## Run with Docker Compose
+This builds the frontend for production and serves it with nginx at
+http://localhost:5173. nginx proxies `/api` to the vision service and `/ml` to
+the ML service; all three are in `docker-compose.yml`. A Cloudflare Quick Tunnel
+publishes the frontend: run `docker compose logs tunnel` for the
+`trycloudflare.com` URL. Tunnel URLs change whenever the container is recreated.
 
-Docker Compose starts the VeriPulse frontend, backend, and a Cloudflare Quick Tunnel.
+## Checks
 
-### 1. Configure environment variables
+```sh
+cd frontend && npm run typecheck && npm test && npm run build
+cd backend && python -m unittest discover -s tests -v
+python -m ml_service.validate_seed && python -m unittest discover -s ml_service/tests -v
+```
 
-Create the environment files from the provided templates:
+`.github/workflows/ci.yml` validates every PR without deploying. A push to
+`dev` runs the checks again, then deploys production.
 
-    cp backend/.env.example backend/.env
-    cp frontend/.env.example frontend/.env
+## Convex delivery and GitHub Pages
 
-Set `GROQ_API_KEY` in `backend/.env` and set `CONVEX_URL` in `frontend/.env`.
+Never commit deploy keys. The GitHub **Environment** named `deployment` must
+contain the production Convex deploy key as `CONVEX_DEPLOY_KEY`:
 
-Do not commit `.env` files or API keys.
+| GitHub environment | Convex deploy key target | Used when |
+| --- | --- | --- |
+| `deployment` | The production deployment | A push or merged PR into `dev` |
 
-### 2. Start VeriPulse
+Create the key in the Convex deployment's **Settings → Deploy keys** with the
+`deployment:deploy` permission.
 
-From the repository root:
+The production job also publishes the frontend to
+`https://vamshikrishna010.github.io/Runtime-terrors/` (choose **GitHub Actions**
+under `Settings → Pages`). The Pages build needs no server: embeddings run in
+the browser and vision analysis is skipped unless the `VITE_API_URL` repository
+variable points at a hosted `backend/`.
 
-    docker compose up --build
+### One-time data migration (each deployment)
 
-The frontend is available at `http://localhost:5173`.
+After deploying these functions, scrub legacy privacy data and recompute every
+score with the server-side scorer:
 
-The backend API is available at `http://localhost:8000`.
+```sh
+cd frontend
+npx convex run migrations:scrubLegacyPrivacy '{"deleteUnsanitizedImages": true}'
+npx convex run migrations:rescoreAll
+```
 
-The `tunnel` service automatically creates a temporary Cloudflare public URL. To find it, run:
+Add `--prod` for the production deployment. Both are internal functions and
+cannot be called from a browser.
 
-    docker compose logs tunnel
+## Known limitations
 
-Look for the `trycloudflare.com` URL in the output.
-
-### 3. Stop VeriPulse
-
-    docker compose down
-
-Cloudflare Quick Tunnel URLs are temporary and may change whenever the tunnel container is recreated.
-
+- There is no real authentication. Device tokens stop accidental double
+  counting, but someone who clears storage or uses several browsers counts as
+  several reporters or voters. Per-token rate limits (5 reports per 10 minutes,
+  20 votes per minute) slow abuse; they do not prevent it.
+- Image measurements (pHash, EXIF time, camera) come from the browser. A
+  modified client could lie about them. Metadata stripping, SHA-256, clustering
+  and scoring happen on the server.
+- `evidence:review` is public, like the review endpoint it replaced.
+- Duplicate detection scans every stored pHash (an indexed range that skips
+  reports without images). Clustering reads only the last two hours of reports.

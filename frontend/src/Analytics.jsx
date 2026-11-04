@@ -1,12 +1,10 @@
-import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import React, { forwardRef, useImperativeHandle, useMemo, useState } from 'react';
+import { useQuery } from 'convex/react';
 import { Activity, FileText, CheckCircle2, XCircle, Image, ShieldCheck, BarChart3, RefreshCw } from 'lucide-react';
 import { ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, Legend, BarChart, Bar } from 'recharts';
-import { requestJson } from './api';
+import { api } from '../convex/_generated/api';
 
 export const DEFAULT_FILTERS = { range: 'all', category: '', evidence_level: '', location: '' };
-export function analyticsQuery(filters) {
-  return new URLSearchParams(Object.entries(filters).filter(([, value]) => value !== '')).toString();
-}
 export function normalizeAnalytics(value) {
   if (!value || typeof value !== 'object' || !value.summary || !Number.isFinite(value.summary.active_incidents)) throw new Error('Unsupported analytics response');
   const numbers = (input, keys) => Object.fromEntries(keys.map((key) => [key, Number.isFinite(input?.[key]) ? input[key] : 0]));
@@ -48,7 +46,7 @@ export function AnalyticsLoading() {
 }
 export function AnalyticsError({ retry }) {
   return <div className="analyticsEmpty" role="alert"><BarChart3 size={32} aria-hidden="true" /><h2>Analytics unavailable</h2>
-    <p>Unable to load analytics data from the backend.</p><button type="button" onClick={retry}>Retry</button></div>;
+    <p>Unable to load analytics data.</p><button type="button" onClick={retry}>Retry</button></div>;
 }
 
 export function AnalyticsContent({ data, onSelectIncident, navigationError }) {
@@ -123,27 +121,28 @@ export function AnalyticsContent({ data, onSelectIncident, navigationError }) {
   </>;
 }
 
+// Convex query arguments use camelCase and omit empty filters.
+export function analyticsArgs(filters) {
+  return {
+    range: filters.range,
+    ...(filters.category && { category: filters.category }),
+    ...(filters.evidence_level && { evidenceLevel: filters.evidence_level }),
+    ...(filters.location && { location: filters.location }),
+  };
+}
+
 const Analytics = forwardRef(function Analytics({ renderHeaderControls, onSelectIncident }, ref) {
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
-  const [data, setData] = useState(null);
-  const [locations, setLocations] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
   const [navigationError, setNavigationError] = useState('');
-  const controllerRef = useRef(null);
-  const load = useCallback(async () => {
-    controllerRef.current?.abort();
-    const controller = new AbortController();
-    controllerRef.current = controller;
-    setLoading(true); setError(false);
-    try {
-      const result = normalizeAnalytics(await requestJson(`/analytics/summary?${analyticsQuery(filters)}`, { signal: controller.signal }));
-      if (!controller.signal.aborted) { setData(result); setLocations(result.available_locations); }
-    } catch (error) { if (!controller.signal.aborted) setError(true); }
-    finally { if (!controller.signal.aborted) setLoading(false); }
-  }, [filters]);
-  useImperativeHandle(ref, () => ({ refresh: load }), [load]);
-  useEffect(() => { load(); return () => controllerRef.current?.abort(); }, [load]);
+  const raw = useQuery(api.analytics.summary, analyticsArgs(filters));
+  const loading = raw === undefined;
+  const { data, error } = useMemo(() => {
+    if (raw === undefined) return { data: null, error: false };
+    try { return { data: normalizeAnalytics(raw), error: false }; } catch { return { data: null, error: true }; }
+  }, [raw]);
+  const locations = data?.available_locations || [];
+  // Convex pushes updates live; refresh is kept for the header button.
+  useImperativeHandle(ref, () => ({ refresh: async () => {} }), []);
   const change = (key, value) => setFilters((current) => ({ ...current, [key]: value }));
   const selectIncident = async (id) => {
     setNavigationError('');
@@ -161,8 +160,8 @@ const Analytics = forwardRef(function Analytics({ renderHeaderControls, onSelect
       <label>Location<select value={filters.location} onChange={(event) => change('location', event.target.value)}><option value="">All locations</option>{locations.map((value) => <option key={value}>{value}</option>)}</select></label>
       <button type="button" onClick={() => setFilters({ ...DEFAULT_FILTERS })}>Reset filters</button>
     </div>
-    <p className="analyticsScope">Analytics uses the FastAPI SQLite dataset; Convex-only reports are not included. Time range selects clusters created in the window and their reports/uploads in that window. Votes, support and review states are current totals for those clusters. Active means current clusters; no resolved status is tracked.</p>
-    {loading ? <AnalyticsLoading /> : error ? <AnalyticsError retry={load} /> : data && <AnalyticsContent data={data} onSelectIncident={selectIncident} navigationError={navigationError} />}
+    <p className="analyticsScope">Analytics reads the same live Convex data as Live Incidents. Time range selects clusters created in the window and their reports/uploads in that window. Votes, support and review states are current totals for those clusters. Active means current clusters; no resolved status is tracked.</p>
+    {loading ? <AnalyticsLoading /> : error ? <AnalyticsError retry={() => setFilters({ ...filters })} /> : data && <AnalyticsContent data={data} onSelectIncident={selectIncident} navigationError={navigationError} />}
   </div>;
 });
 export default Analytics;
