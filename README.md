@@ -1,16 +1,43 @@
 # VeriPulse
 
-HackUMBC AI/ML MVP for trust-scored crowdsourced incident reports.
+HackUMBC 2026 AI/ML project by Team Runtime Terrors: a campus incident-reporting
+app that clusters crowdsourced reports and shows how strongly each incident is
+supported by independent evidence, with a readable reason for every signal.
+It measures support; it never claims a report is true or fake.
 
-## Structure
+## Tech stack in use
 
-- `frontend/` - React + Vite application
-- `backend/` - FastAPI + SQLite API
+| Part | Technology | What it does |
+| --- | --- | --- |
+| Web app (`frontend/`) | React, Vite, Leaflet, Recharts, Lucide | Reporter flow, dashboard, campus map, Live Incidents, analytics |
+| Realtime data (`frontend/convex/`) | Convex | Reports, incidents, photo storage, cosine clustering, votes |
+| ML service (`ml_service/`) | FastAPI, sentence-transformers `all-MiniLM-L6-v2` | `POST /embed` (384-dim vectors), `POST /score` (support score + reasons) |
+| Backend (`backend/`) | FastAPI, Pillow, ImageHash, SQLModel/SQLite | `POST /evidence/analyze` (EXIF, perceptual hash, vision), Evidence Center and analytics APIs |
+| Vision model | Groq API, `qwen/qwen3.8-27b` | Describes report photos and flags visible signs of editing or generation |
+| Ops | Docker Compose, Cloudflare Tunnel, Tilt, GitHub Actions | Local stack, public demo URL, CI, Convex and GitHub Pages deploys |
 
-## Run the backend
+## How a report flows
 
-For a single-command development stack, use Tilt below. Manual startup commands
-are also available here.
+1. The web app sends the description to the ML service `/embed` (MiniLM).
+2. If a photo is attached, the backend `/evidence/analyze` reads EXIF with Pillow,
+   computes a perceptual hash with ImageHash, and calls Qwen vision on Groq.
+   The photo itself is uploaded to Convex storage.
+3. Convex `reports.createClustered` joins the best existing incident with the same
+   category and building, within 2 hours, at cosine similarity >= 0.32; otherwise
+   it starts a new incident. A photo hash already seen is marked as reused.
+4. The web app sends the cluster's inputs to the ML service `/score` and saves the
+   score, evidence level (Low / Emerging / Strong) and reasons with
+   `incidents.applyScore`. The dashboard updates live through Convex.
+
+Scoring inputs used today: distinct reporter tokens, semantic agreement, time
+proximity, same-building agreement, confirmations, contradictions, unique images
+and reused images. The scorer also supports visual-match and metadata-conflict
+terms, which are not yet fed by the app. Confirm/contradict votes update counts;
+the score is recalculated on the next report for that incident.
+
+## Run the services manually
+
+Backend (port 8000):
 
 ```bash
 cd backend
@@ -19,7 +46,15 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
 
-## Run the frontend
+ML service (port 8001, from the repository root; see [ML setup](ml_service/README.md)):
+
+```bash
+python -m venv ml_service/.venv
+ml_service/.venv/Scripts/python.exe -m pip install -r ml_service/requirements.txt
+ml_service/.venv/Scripts/python.exe -m uvicorn ml_service.main:app --reload --port 8001
+```
+
+Frontend (port 5173):
 
 ```bash
 cd frontend
@@ -27,7 +62,8 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173.
+Open http://localhost:5173. The frontend needs `CONVEX_URL` and, if the ML service
+is not on `http://127.0.0.1:8001`, `VITE_ML_SERVICE_URL`.
 
 ## Convex delivery through GitHub
 
@@ -62,7 +98,8 @@ source before the first production merge.
 Install [Tilt](https://docs.tilt.dev/install.html), Node.js with npm, and Python
 3.12 or newer. Ensure `python` is on PATH on Windows, or `python3` on macOS/Linux.
 These Tiltfiles use [local resources](https://docs.tilt.dev/local_resource.html)
-to run the current Vite, FastAPI/SQLite, and ML services. Docker and Kubernetes
+to run the Vite frontend and the FastAPI/SQLite backend. Start the ML service
+separately (see above, or `tilt up -f ml_service/Tiltfile`). Docker and Kubernetes
 are not required for this setup.
 
 From the repository root:
@@ -71,20 +108,20 @@ From the repository root:
 tilt up
 ```
 
-Tilt installs frontend dependencies with `npm ci`, creates a `.venv` in each
-Python service directory, installs its requirements, and starts all three
-services. Dependency file changes rerun setup and restart the affected service.
+Tilt installs frontend dependencies with `npm ci`, creates a `.venv` in the
+backend directory, installs its requirements, and starts both services. Dependency file changes rerun setup and restart the affected service.
 Vite handles frontend source updates; Uvicorn reloads Python source changes.
 
 | Service | Address |
 | --- | --- |
 | Frontend | http://localhost:5173 |
 | Backend API docs | http://localhost:8000/docs |
-| ML service docs | http://localhost:8001/docs |
+| ML service docs (started separately) | http://localhost:8001/docs |
 | Tilt dashboard | http://localhost:10350 |
 
-The root `Tiltfile` loads `frontend/Tiltfile`, `backend/Tiltfile`, and
-`ml_service/Tiltfile`. To work on one service, run one of these from the root:
+The root `Tiltfile` loads `frontend/Tiltfile` and `backend/Tiltfile`.
+`ml_service/Tiltfile` runs on its own. To work on one service, run one of these
+from the root:
 
 ```sh
 tilt up -f frontend/Tiltfile
@@ -102,8 +139,6 @@ move to an origin the backend does not allow.
 
 Press Ctrl+C in the Tilt terminal to stop its local processes. Python virtual
 environments, frontend dependencies, uploaded files, and SQLite data remain.
-The ML health check confirms the skeleton is running; embedding and scoring
-capabilities are still pending, as documented in [ML setup](ml_service/README.md).
 
 To check startup and exit once all services pass their health probes:
 
@@ -114,6 +149,7 @@ tilt ci --timeout 5m
 ## Run with Docker Compose
 
 Docker Compose starts the VeriPulse frontend, backend, and a Cloudflare Quick Tunnel.
+The ML service is not in the compose file; run it separately on port 8001.
 
 ### 1. Configure environment variables
 
@@ -122,7 +158,8 @@ Create the environment files from the provided templates:
     cp backend/.env.example backend/.env
     cp frontend/.env.example frontend/.env
 
-Set `GROQ_API_KEY` in `backend/.env` and set `CONVEX_URL` in `frontend/.env`.
+Set `GROQ_API_KEY` and `GROQ_QWEN_API_KEY` in `backend/.env`, and set `CONVEX_URL`
+(plus `VITE_ML_SERVICE_URL` if needed) in `frontend/.env`.
 
 Do not commit `.env` files or API keys.
 

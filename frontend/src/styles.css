@@ -2598,6 +2598,376 @@ button.profile:hover,
 .incidentEvidenceThumbnails button { flex-shrink: 0; width: 70px; height: 56px; padding: 0; overflow: hidden; border: 2px solid var(--border); border-radius: 8px; background: var(--panel); cursor: pointer; }
 .incidentEvidenceThumbnails img { width: 100%; height: 100%; object-fit: cover; }
 .incidentEvidenceThumbnails button[aria-pressed="true"], .incidentEvidenceMain:hover { border-color: var(--primary); }
+
+/* ANALYTICS */
+
+.analyticsPage {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 30px 34px 48px;
+}
+
+.analyticsPage .pageHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 22px;
+}
+
+.analyticsPage h1,
+.analyticsPage h2 {
+  color: var(--text);
+}
+
+.analyticsPage h1 {
+  margin: 4px 0 8px;
+  font-size: clamp(26px, 3vw, 36px);
+}
+
+.analyticsPage .pageHeader p:not(.eyebrow),
+.analyticsScope,
+.analyticsNote {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.analyticsPage .pageHeader p:not(.eyebrow) {
+  max-width: 680px;
+  margin: 0;
+}
+
+.analyticsHeaderActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.analyticsLiveStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 11px;
+  border: 1px solid var(--success-soft);
+  border-radius: 999px;
+  color: var(--success);
+  background: var(--success-soft);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.analyticsLiveStatus.error {
+  border-color: var(--danger-soft);
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.analyticsFilters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(140px, 1fr)) auto;
+  align-items: end;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.analyticsFilters label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.analyticsFilters select,
+.analyticsFilters button,
+.analyticsEmpty button {
+  min-height: 38px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  padding: 8px 11px;
+  cursor: pointer;
+}
+
+.analyticsFilters button,
+.analyticsEmpty button {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: white;
+  font-weight: 700;
+}
+
+.analyticsFilters button:hover,
+.analyticsEmpty button:hover {
+  background: var(--sidebar-soft);
+}
+
+.analyticsScope {
+  margin: 14px 0 22px;
+  font-size: 12px;
+}
+
+.analyticsSummary {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.analyticsSummary .stat {
+  display: flex;
+  gap: 11px;
+  min-width: 0;
+  padding: 15px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.statIcon {
+  display: grid;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 9px;
+}
+
+.statIcon.info { color: var(--info); background: var(--info-soft); }
+.statIcon.success { color: var(--success); background: var(--success-soft); }
+.statIcon.danger { color: var(--danger); background: var(--danger-soft); }
+
+.statContent {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.statContent span,
+.statContent small {
+  color: var(--muted);
+}
+
+.statContent span {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.statContent strong {
+  font-size: 23px;
+  line-height: 1.1;
+}
+
+.statContent small {
+  font-size: 10px;
+  line-height: 1.3;
+}
+
+.analyticsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.analyticsPanel {
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.analyticsPanel > h2 {
+  margin: 0 0 14px;
+  font-size: 17px;
+}
+
+.analyticsPanel > .analyticsNote {
+  margin: -5px 0 14px;
+  font-size: 12px;
+}
+
+.analyticsChart {
+  width: 100%;
+  height: 250px;
+}
+
+.analyticsChart.compact {
+  height: 190px;
+}
+
+.analyticsChartEmpty,
+.analyticsEmpty {
+  color: var(--muted);
+  text-align: center;
+}
+
+.analyticsChartEmpty {
+  padding: 75px 12px;
+}
+
+.analyticsValues {
+  display: grid;
+  gap: 9px;
+  margin: 16px 0 0;
+}
+
+.analyticsValues > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+}
+
+.analyticsValues dt,
+.analyticsValues dd {
+  margin: 0;
+  font-size: 12px;
+}
+
+.analyticsValues dt { color: var(--muted); }
+.analyticsValues dd { color: var(--text); font-weight: 700; text-align: right; }
+
+.analyticsStrengthBar {
+  display: flex;
+  height: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--border);
+}
+
+.analyticsStrengthBar span.low { background: #f59e0b; }
+.analyticsStrengthBar span.emerging { background: #3b82f6; }
+.analyticsStrengthBar span.strong { background: #22c55e; }
+
+.analyticsLocations {
+  display: grid;
+  gap: 15px;
+}
+
+.analyticsLocationHeading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 7px;
+  font-size: 12px;
+}
+
+.analyticsLocationHeading span { color: var(--muted); text-align: right; }
+
+.analyticsLocationTrack {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--primary-soft);
+}
+
+.analyticsLocationTrack span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--primary);
+}
+
+.analyticsData {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.analyticsData summary { cursor: pointer; }
+
+.analyticsTableScroll {
+  overflow-x: auto;
+}
+
+.analyticsTableScroll table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 700px;
+  font-size: 12px;
+}
+
+.analyticsTableScroll th,
+.analyticsTableScroll td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.analyticsTableScroll th {
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.analyticsIncidentLink {
+  border: 0;
+  padding: 0;
+  color: var(--primary);
+  background: transparent;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.analyticsLoading .analyticsSkeleton {
+  min-height: 82px;
+  border-radius: 12px;
+  background: linear-gradient(90deg, var(--border), #f8fafc, var(--border));
+  background-size: 200% 100%;
+  animation: analyticsShimmer 1.4s infinite;
+}
+
+.analyticsLoading .analyticsSkeleton.chart { min-height: 300px; }
+
+.analyticsEmpty {
+  display: grid;
+  justify-items: center;
+  gap: 9px;
+  padding: 56px 20px;
+}
+
+.analyticsEmpty h2,
+.analyticsEmpty p { margin: 0; }
+
+.analyticsEmpty p { max-width: 440px; line-height: 1.5; }
+
+@keyframes analyticsShimmer {
+  to { background-position: -200% 0; }
+}
+
+@media (max-width: 1100px) {
+  .analyticsSummary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .analyticsFilters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 760px) {
+  .analyticsPage { padding: 22px 16px 36px; }
+  .analyticsPage .pageHeader { display: block; }
+  .analyticsHeaderActions { justify-content: flex-start; margin-top: 16px; }
+  .analyticsSummary,
+  .analyticsGrid { grid-template-columns: 1fr; }
+  .analyticsFilters { grid-template-columns: 1fr; }
+  .analyticsFilters button { width: 100%; }
+}
 .incidentVisualEvidence button:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
 .incidentEvidencePlaceholder { min-height: 110px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 20px; background: var(--primary-soft); color: var(--muted); border: 1px solid var(--border); border-radius: 12px; font-size: 13px; }
 .incidentEvidencePlaceholder button { border: 1px solid var(--border); border-radius: 6px; background: var(--panel); color: var(--primary); padding: 6px 12px; cursor: pointer; }

@@ -9,6 +9,7 @@ local_resource(
     serve_cmd='npm run dev -- --host localhost --port 5173 --strictPort',
     dir=frontend_dir,
     serve_dir=frontend_dir,
+    serve_env={'API_PROXY_TARGET': 'http://127.0.0.1:8000'},
     deps=['package.json', 'package-lock.json'],
     allow_parallel=True,
     readiness_probe=probe(

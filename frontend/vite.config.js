@@ -7,14 +7,15 @@ export default defineConfig({
     ? '/Runtime-terrors/'
     : '/',
   envDir: '..',
-  envPrefix: ['VITE_', 'CONVEX_'],
+  envPrefix: ['VITE_', 'CONVEX_URL'],
   server: {
     host: '0.0.0.0',
     port: 5173,
     allowedHosts: ['.trycloudflare.com'],
     proxy: {
       '/api': {
-        target: 'http://backend:8000',
+        // docker-compose reaches the API by service name; Tilt overrides this.
+        target: process.env.API_PROXY_TARGET || 'http://backend:8000',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
